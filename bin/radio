@@ -1,0 +1,364 @@
+#!/usr/bin/env python3
+"""
+radio — command-line control of the KD9NWA IC-7300 station (agent-friendly).
+
+All subcommands emit JSON on stdout (unless --plot/-h). Safe by default:
+transmit is gated behind `radio tx-enable` + explicit `--allow-tx`.
+
+Examples:
+  radio status                      # freq/mode/S-meter/PTT/band as JSON
+  radio freq 14074000               # QSY (does NOT transmit)
+  radio mode USB
+  radio smeter
+  radio scan --band 20m --step 500 --plot ~/radio/scans/20m.png
+  radio scan --lo 7000000 --hi 7300000 --mode CW
+  radio cw --seconds 20             # decode Morse from RX audio
+  radio speech --seconds 20         # speech-to-text from RX audio (SSB)
+  radio send-cw "CQ CQ DE KD9NWA" --wpm 20 --dry-run   # generate/transmit CW
+  radio send-speech "this is kilo delta nine ..." --dry-run  # TTS + transmit
+  radio preview-cw "TEST" --out /tmp/t.wav             # render CW WAV, no TX
+  radio preview-speech "hello" --out /tmp/t.wav        # render TTS WAV, no TX
+  radio audio-devices               # is the radio's USB codec visible?
+  radio tx-enable "bench test w/ dummy load"   # arm the TX master switch
+  radio tx-disable
+  radio unkey                       # force PTT off (safety)
+"""
+import argparse
+import json
+import os
+import sys
+import time
+import pathlib
+
+sys.path.insert(0, os.path.expanduser("~/radio/agent"))
+from hamradio import Rig, RigError                      # noqa: E402
+from hamradio import scan as scanmod                    # noqa: E402
+from hamradio import decode as decodemod                # noqa: E402
+from hamradio import audio as audiomod                  # noqa: E402
+from hamradio import tx as txmod                        # noqa: E402
+from hamradio import generate as genmod                 # noqa: E402
+from hamradio import ft8 as ft8mod                      # noqa: E402
+from hamradio import pskreporter as pskmod              # noqa: E402
+from hamradio import location as locmod                 # noqa: E402
+
+# Station identity (KD9NWA, grid EN51). Override with env if needed.
+MY_CALL = os.environ.get("MY_CALL", "KD9NWA")
+MY_GRID = os.environ.get("MY_GRID", "EN51")
+
+
+def out(obj):
+    print(json.dumps(obj, indent=2))
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="radio", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("status", help="rig telemetry as JSON")
+    sub.add_parser("smeter", help="S-meter reading")
+
+    p = sub.add_parser("rfgain", help="get/set RF gain (0.0..1.0); low = muted RX")
+    p.add_argument("value", nargs="?", type=float)
+    sub.add_parser("audio-devices", help="show radio audio capture devices")
+    sub.add_parser("tx-status", help="is TX master switch enabled?")
+    sub.add_parser("clock", help="NTP/clock sync health (needed for FT8)")
+
+    p = sub.add_parser("whois", help="fast local callsign -> location lookup")
+    p.add_argument("call", help="callsign to look up")
+    p.add_argument("--grid", default="", help="their grid, if known (refines location)")
+
+    p = sub.add_parser("whois-rebuild", help="(re)build the FCC callsign database")
+
+    p = sub.add_parser("whohearsme", help="PSKReporter: who has heard us recently")
+    p.add_argument("--call", default=MY_CALL, help="callsign (default MY_CALL)")
+    p.add_argument("--minutes", type=int, default=15, help="look-back window")
+    p.add_argument("--top", type=int, default=0, help="limit report rows (0=all)")
+    sub.add_parser("unkey", help="force PTT OFF (safety)")
+
+    p = sub.add_parser("freq", help="get/set dial frequency (Hz)")
+    p.add_argument("hz", nargs="?", type=int)
+
+    p = sub.add_parser("mode", help="get/set mode (USB/LSB/CW/FM/AM/...)")
+    p.add_argument("mode", nargs="?")
+    p.add_argument("passband", nargs="?", type=int, default=0)
+
+    p = sub.add_parser("scan", help="band occupancy scan -> JSON (+optional PNG)")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--band", help="named band, e.g. 20m")
+    g.add_argument("--lo", type=int, help="low edge Hz (with --hi)")
+    p.add_argument("--hi", type=int, help="high edge Hz")
+    p.add_argument("--step", type=int, default=1000, help="step Hz (default 1000)")
+    p.add_argument("--mode", help="set mode before scanning (e.g. USB, CW)")
+    p.add_argument("--settle", type=float, default=0.05, help="dwell s/step")
+    p.add_argument("--margin", type=int, default=6, help="activity dB margin")
+    p.add_argument("--plot", help="also write a PNG usage map to this path")
+    p.add_argument("--json-out", help="also write full JSON to this path")
+
+    p = sub.add_parser("cw", help="decode Morse from RX audio")
+    p.add_argument("--seconds", type=float, default=20.0)
+    p.add_argument("--wav", help="decode an existing WAV instead of capturing")
+
+    p = sub.add_parser("ft8", help="decode FT8 (WSJT-X jt9) from RX audio")
+    p.add_argument("--band", help="auto-tune to this band's FT8 dial (e.g. 20m)")
+    p.add_argument("--seconds", type=float, default=13.5)
+    p.add_argument("--no-align", action="store_true",
+                   help="do not wait for the 15s FT8 cycle boundary")
+    p.add_argument("--wav", help="decode an existing WAV instead of capturing")
+    p.add_argument("--cycles", type=int, default=1, help="decode N cycles")
+    p.add_argument("--locate", action="store_true",
+                   help="annotate each decode with the caller's location")
+
+    p = sub.add_parser("speech", help="speech-to-text from RX audio (SSB voice)")
+    p.add_argument("--seconds", type=float, default=20.0)
+    p.add_argument("--wav", help="decode an existing WAV instead of capturing")
+    p.add_argument("--model", help="path to a whisper ggml model")
+
+    p = sub.add_parser("tx-enable", help="arm TX master switch (licensed op only)")
+    p.add_argument("reason", nargs="?", default="")
+    sub.add_parser("tx-disable", help="disarm TX master switch")
+
+    p = sub.add_parser("send-cw", help="GENERATE + transmit Morse (gated)")
+    p.add_argument("text")
+    p.add_argument("--wpm", type=int, default=20)
+    p.add_argument("--method", choices=["rig", "audio"], default="audio")
+    p.add_argument("--tone", type=int, default=700, help="sidetone Hz (audio method)")
+    p.add_argument("--allow-tx", action="store_true", help="required to actually key")
+    p.add_argument("--timeout", type=int, default=0, help="max key-down s (0=auto)")
+    p.add_argument("--dry-run", action="store_true", help="simulate, do not key")
+
+    p = sub.add_parser("send-speech", help="GENERATE + transmit voice via TTS (gated)")
+    p.add_argument("text")
+    p.add_argument("--voice", help="path to a piper .onnx voice")
+    p.add_argument("--allow-tx", action="store_true", help="required to actually key")
+    p.add_argument("--timeout", type=int, default=0, help="max key-down s (0=auto)")
+    p.add_argument("--dry-run", action="store_true", help="simulate, do not key")
+
+    p = sub.add_parser("ft8-call", help="answer a station calling CQ (full QSO, GATED)")
+    p.add_argument("dxcall", help="the station's callsign")
+    p.add_argument("dxgrid", nargs="?", default="", help="their grid (optional)")
+    p.add_argument("--band", help="auto-tune to this band's FT8 dial first")
+    p.add_argument("--offset", type=int, default=ft8mod.DEFAULT_TX_OFFSET,
+                   help="TX audio offset Hz (default 1500)")
+    p.add_argument("--allow-tx", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--max-cycles", type=int, default=12)
+
+    p = sub.add_parser("ft8-cq", help="call CQ and work the first answer (GATED)")
+    p.add_argument("--band", help="auto-tune to this band's FT8 dial first")
+    p.add_argument("--offset", type=int, default=ft8mod.DEFAULT_TX_OFFSET)
+    p.add_argument("--allow-tx", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--max-cycles", type=int, default=20)
+
+    p = sub.add_parser("ft8-encode", help="generate an FT8 WAV for a message (no TX)")
+    p.add_argument("message")
+    p.add_argument("--offset", type=int, default=ft8mod.DEFAULT_TX_OFFSET)
+    p.add_argument("--out", required=True)
+
+    p = sub.add_parser("preview-cw", help="render CW to a WAV (no TX)")
+    p.add_argument("text")
+    p.add_argument("--wpm", type=int, default=20)
+    p.add_argument("--tone", type=int, default=700)
+    p.add_argument("--out", required=True, help="output WAV path")
+
+    p = sub.add_parser("preview-speech", help="render TTS to a WAV (no TX)")
+    p.add_argument("text")
+    p.add_argument("--voice", help="path to a piper .onnx voice")
+    p.add_argument("--out", required=True, help="output WAV path")
+
+    args = ap.parse_args()
+    rig = Rig()
+
+    try:
+        if args.cmd == "status":
+            out(rig.status().to_dict())
+
+        elif args.cmd == "smeter":
+            out({"smeter_db": rig.get_smeter()})
+
+        elif args.cmd == "rfgain":
+            if args.value is None:
+                out({"rf_gain": float(rig._cmd("get_level RF")[-1])})
+            else:
+                rig._cmd(f"set_level RF {max(0.0, min(1.0, args.value))}")
+                out({"rf_gain": float(rig._cmd("get_level RF")[-1]), "set": True})
+
+        elif args.cmd == "freq":
+            if args.hz is None:
+                out({"freq_hz": rig.get_freq()})
+            else:
+                rig.set_freq(args.hz)
+                out({"freq_hz": rig.get_freq(), "set": True})
+
+        elif args.cmd == "mode":
+            if args.mode is None:
+                m, pb = rig.get_mode()
+                out({"mode": m, "passband_hz": pb})
+            else:
+                rig.set_mode(args.mode, args.passband)
+                m, pb = rig.get_mode()
+                out({"mode": m, "passband_hz": pb, "set": True})
+
+        elif args.cmd == "scan":
+            kw = dict(step_hz=args.step, mode=args.mode,
+                      settle_s=args.settle, margin_db=args.margin)
+            if args.band:
+                res = scanmod.scan_band(rig, args.band, **kw)
+            else:
+                if args.hi is None:
+                    ap.error("--lo requires --hi")
+                res = scanmod.scan(rig, args.lo, args.hi, **kw)
+            if args.plot:
+                pathlib.Path(args.plot).parent.mkdir(parents=True, exist_ok=True)
+                res["plot_png"] = scanmod.plot(res, args.plot)
+            if args.json_out:
+                pathlib.Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)
+                pathlib.Path(args.json_out).write_text(json.dumps(res))
+                res["_json_out"] = args.json_out
+            # keep stdout compact: drop the giant points[] unless no plot
+            summary = {k: v for k, v in res.items() if k != "points"}
+            summary["n_points"] = res["n_points"]
+            out(summary)
+
+        elif args.cmd == "cw":
+            out(decodemod.decode_cw(wav_path=args.wav, seconds=args.seconds))
+
+        elif args.cmd == "ft8":
+            if args.band:
+                dial = decodemod.FT8_DIAL.get(args.band)
+                if not dial:
+                    out({"error": f"no FT8 dial known for band {args.band}"})
+                    sys.exit(1)
+                rig.set_freq(dial)
+                rig.set_mode("USB")
+            if args.wav:
+                out(decodemod.decode_ft8(wav_path=args.wav, enrich=args.locate))
+            else:
+                results = []
+                for _ in range(max(1, args.cycles)):
+                    results.append(decodemod.decode_ft8(
+                        seconds=args.seconds, align=not args.no_align,
+                        enrich=args.locate))
+                if len(results) == 1:
+                    out(results[0])
+                else:
+                    alld = [d for r in results for d in r["decodes"]]
+                    allcq = sorted({c for r in results for c in r["cq_calls"]})
+                    out({"decoder": "wsjtx/jt9 FT8", "cycles": len(results),
+                         "n_decodes": len(alld), "decodes": alld,
+                         "cq_calls": allcq})
+
+        elif args.cmd == "speech":
+            out(decodemod.decode_speech(wav_path=args.wav, seconds=args.seconds,
+                                        model=args.model))
+
+        elif args.cmd == "audio-devices":
+            out(audiomod.list_audio_devices())
+
+        elif args.cmd == "clock":
+            from hamradio.rig import clock_sync
+            out(clock_sync())
+
+        elif args.cmd == "whois":
+            out(locmod.lookup(args.call, args.grid, my_grid=MY_GRID + "TP"
+                              if len(MY_GRID) == 4 else MY_GRID))
+
+        elif args.cmd == "whois-rebuild":
+            import glob
+            dd = os.path.expanduser("~/radio/data")
+            en = os.path.join(dd, "EN.dat"); hd = os.path.join(dd, "HD.dat")
+            if not os.path.exists(en):
+                out({"error": "EN.dat not found; download l_amat.zip first"}); sys.exit(1)
+            out(locmod.build_fcc_db(en, hd))
+
+        elif args.cmd == "whohearsme":
+            res = pskmod.who_hears(args.call, my_grid=MY_GRID,
+                                   since_s=args.minutes * 60)
+            if args.top and res.get("reports"):
+                res = {**res, "reports": res["reports"][:args.top]}
+            out(res)
+
+        elif args.cmd == "tx-status":
+            out({"tx_enabled": txmod.tx_globally_enabled(),
+                 "enable_file": str(txmod.TX_ENABLE_FILE)})
+
+        elif args.cmd == "tx-enable":
+            txmod.enable_tx(args.reason)
+            out({"tx_enabled": True, "reason": args.reason,
+                 "reminder": "Ensure antenna or dummy load is connected. "
+                             "You are responsible as KD9NWA for all emissions."})
+
+        elif args.cmd == "tx-disable":
+            txmod.disable_tx()
+            out({"tx_enabled": False})
+
+        elif args.cmd == "unkey":
+            txmod.watchdog_unkey(rig)
+            out({"ptt": rig.get_ptt(), "unkeyed": True})
+
+        elif args.cmd == "send-cw":
+            out(genmod.send_cw(rig, args.text, wpm=args.wpm, method=args.method,
+                               tone_hz=args.tone, allow_tx=args.allow_tx,
+                               timeout=(args.timeout or None), dry_run=args.dry_run))
+
+        elif args.cmd == "send-speech":
+            out(genmod.send_speech(rig, args.text, voice=args.voice,
+                                   allow_tx=args.allow_tx,
+                                   timeout=(args.timeout or None),
+                                   dry_run=args.dry_run))
+
+        elif args.cmd == "ft8-call":
+            if args.band:
+                dial = decodemod.FT8_DIAL.get(args.band)
+                if not dial:
+                    out({"error": f"no FT8 dial for {args.band}"}); sys.exit(1)
+                rig.set_freq(dial); rig.set_mode("USB")
+            def _ev(e):
+                print(json.dumps({"event": e}), flush=True)
+            log = ft8mod.answer_cq(rig, args.dxcall, args.dxgrid, MY_CALL,
+                                   MY_GRID, offset_hz=args.offset,
+                                   allow_tx=args.allow_tx, dry_run=args.dry_run,
+                                   max_cycles=args.max_cycles, on_event=_ev)
+            out({"qso": log})
+
+        elif args.cmd == "ft8-cq":
+            if args.band:
+                dial = decodemod.FT8_DIAL.get(args.band)
+                if not dial:
+                    out({"error": f"no FT8 dial for {args.band}"}); sys.exit(1)
+                rig.set_freq(dial); rig.set_mode("USB")
+            def _ev2(e):
+                print(json.dumps({"event": e}), flush=True)
+            log = ft8mod.call_cq(rig, MY_CALL, MY_GRID, offset_hz=args.offset,
+                                 allow_tx=args.allow_tx, dry_run=args.dry_run,
+                                 max_cycles=args.max_cycles, on_event=_ev2)
+            out({"qso": log})
+
+        elif args.cmd == "ft8-encode":
+            pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+            wav = ft8mod.encode_wav(args.message, args.offset)
+            import shutil as _sh; _sh.move(wav, args.out)
+            out({"wav": args.out, "message": args.message, "offset_hz": args.offset})
+
+        elif args.cmd == "preview-cw":
+            pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+            wav = genmod.cw_to_wav(args.text, wpm=args.wpm, tone_hz=args.tone,
+                                   out_path=args.out)
+            out({"wav": wav, "text": args.text.upper(), "wpm": args.wpm})
+
+        elif args.cmd == "preview-speech":
+            pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+            res = genmod.tts_to_wav(args.text, voice=args.voice, out_path=args.out)
+            out(res)
+
+    except txmod.TxRefused as e:
+        out({"error": str(e), "cmd": args.cmd, "tx_refused": True})
+        sys.exit(2)
+    except (RigError, RuntimeError, ValueError) as e:
+        out({"error": str(e), "cmd": args.cmd})
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

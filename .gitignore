@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+# generated / runtime data (not source)
+data/*.sqlite
+data/*.dat
+data/*.zip
+scans/*.png
+scans/*.json
+logs/*.adi
+TX_ENABLED
+*.wav
+.DS_Store

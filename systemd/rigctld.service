@@ -1,0 +1,18 @@
+[Unit]
+Description=Hamlib rigctld for IC-7300 (KD9NWA station control hub)
+Documentation=man:rigctld(1)
+After=network.target
+
+[Service]
+Type=simple
+# IC-7300 = hamlib model 3073, CAT via the CP2102 USB-UART bridge @ 115200.
+# The wrapper auto-detects the serial device and waits for the radio to power
+# on. rigctld listens on 127.0.0.1:4532 so WSJT-X/fldigi/the agent share it.
+ExecStart=%h/radio/agent/bin/rigctld-ic7300
+Restart=always
+RestartSec=5
+# Radio may be OFF; keep trying so the hub is live the moment it powers on.
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=default.target

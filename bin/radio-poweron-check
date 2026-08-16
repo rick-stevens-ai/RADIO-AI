@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+# radio-poweron-check — first power-on verification for the KD9NWA IC-7300.
+#
+# Run this the moment the radio is switched on. It walks the hardware stack in
+# dependency order and reports PASS/WARN/FAIL for each layer:
+#   1. CAT serial device (CP2102) present
+#   2. rigctld hub up + talking to the rig (with baud auto-probe on failure)
+#   3. RX telemetry: freq / mode / S-meter round-trip
+#   4. Audio: IC-7300 USB codec visible as capture (RX) AND playback (TX)
+#   5. RX decode smoke test: capture a few seconds, run CW + speech decoders
+#   6. TX (ONLY with --tx and interactive confirmation): dry-run, then a short
+#      keyed CW id into a DUMMY LOAD. Never transmits without --tx + confirm.
+#
+# Safe by default: no transmission unless you pass --tx AND type YES at the
+# antenna/dummy-load prompt.
+#
+# Usage:
+#   radio-poweron-check              # full RX-side checks, no transmit
+#   radio-poweron-check --tx         # also run a gated TX test (asks to confirm)
+#   radio-poweron-check --quick      # skip the audio decode smoke test
+set -u
+
+RADIO="${RADIO_CLI:-$HOME/.local/bin/radio}"
+DO_TX=0
+QUICK=0
+for a in "$@"; do
+    case "$a" in
+        --tx) DO_TX=1 ;;
+        --quick) QUICK=1 ;;
+        -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+        *) echo "unknown arg: $a" >&2; exit 2 ;;
+    esac
+done
+
+# ---- pretty output ---------------------------------------------------------
+g(){ printf '  \033[32mPASS\033[0m %s\n' "$*"; }
+w(){ printf '  \033[33mWARN\033[0m %s\n' "$*"; }
+f(){ printf '  \033[31mFAIL\033[0m %s\n' "$*"; }
+h(){ printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
+jq_or_cat(){ command -v jq >/dev/null 2>&1 && jq "$@" || cat; }
+
+FAILS=0
+note_fail(){ FAILS=$((FAILS+1)); }
+
+echo "KD9NWA IC-7300 power-on check  ($(date '+%Y-%m-%d %H:%M:%S'))"
+
+# ===========================================================================
+h "1. CAT serial device (CP2102)"
+CAT=""
+for p in /dev/serial/by-id/*CP2102* /dev/serial/by-id/*Silicon_Labs* ; do
+    [ -e "$p" ] && CAT="$p" && break
+done
+if [ -z "$CAT" ]; then
+    for d in /dev/ttyUSB* /dev/ttyACM*; do [ -e "$d" ] && CAT="$d" && break; done
+fi
+if [ -n "$CAT" ]; then
+    g "CAT device: $CAT -> $(readlink -f "$CAT")"
+else
+    f "no CAT serial device found. Is the radio ON and USB connected?"
+    note_fail
+    echo; echo "Cannot continue without CAT. Check the USB cable and radio power."
+    exit 1
+fi
+
+# ===========================================================================
+h "2. rigctld hub"
+svc_active(){ systemctl --user is-active rigctld.service 2>/dev/null; }
+if [ "$(svc_active)" = active ]; then
+    g "rigctld.service is active"
+else
+    w "rigctld.service not active — starting it"
+    systemctl --user start rigctld.service 2>/dev/null
+    sleep 3
+fi
+# Give the auto-detect wrapper a moment to grab the now-present serial port.
+for _ in $(seq 1 10); do
+    if "$RADIO" status >/dev/null 2>&1; then break; fi
+    sleep 1
+done
+
+if "$RADIO" status >/dev/null 2>&1; then
+    g "rigctld is answering on 127.0.0.1:4532"
+else
+    f "rigctld not answering. Possible CI-V baud mismatch."
+    note_fail
+    echo "  Probing common CI-V bauds against $CAT ..."
+    for baud in 115200 57600 38400 19200 9600 4800; do
+        if timeout 6 rigctld -m 3073 -r "$CAT" -s "$baud" -t 4599 -T 127.0.0.1 \
+               >/dev/null 2>&1 & then
+            sleep 2
+            if printf '+f\n' | timeout 3 nc -q1 127.0.0.1 4599 2>/dev/null \
+                 | grep -q Frequency; then
+                w "rig responds at ${baud} baud (service is using a different rate)"
+                echo "     -> set the radio menu to 115200, OR run the service with"
+                echo "        IC7300_BAUD=${baud} (edit rigctld-ic7300 / systemd unit)."
+                pkill -f 'rigctld.*4599' 2>/dev/null
+                break
+            fi
+            pkill -f 'rigctld.*4599' 2>/dev/null
+        fi
+    done
+fi
+
+# ===========================================================================
+h "3. RX telemetry round-trip"
+ST="$("$RADIO" status 2>/dev/null)"
+if [ -n "$ST" ] && ! echo "$ST" | grep -q '"error"'; then
+    echo "$ST" | jq_or_cat .
+    FREQ=$(echo "$ST" | sed -n 's/.*"freq_hz": *\([0-9]*\).*/\1/p' | head -1)
+    MODE=$(echo "$ST" | sed -n 's/.*"mode": *"\([^"]*\)".*/\1/p' | head -1)
+    SM=$(echo "$ST"   | sed -n 's/.*"smeter_db": *\(-\{0,1\}[0-9]*\).*/\1/p' | head -1)
+    [ -n "$FREQ" ] && [ "$FREQ" -gt 0 ] 2>/dev/null && g "freq read: $FREQ Hz" \
+        || { f "freq read failed"; note_fail; }
+    [ -n "$MODE" ] && g "mode read: $MODE" || { w "mode read empty"; }
+    if [ -n "$SM" ]; then g "S-meter read: ${SM} dB rel S9"; else
+        w "S-meter not reported (some modes/states don't)"; fi
+    # non-destructive freq round-trip: nudge +1 kHz and back
+    if [ -n "$FREQ" ] && [ "$FREQ" -gt 0 ] 2>/dev/null; then
+        "$RADIO" freq $((FREQ+1000)) >/dev/null 2>&1
+        NF=$("$RADIO" freq 2>/dev/null | sed -n 's/.*"freq_hz": *\([0-9]*\).*/\1/p')
+        "$RADIO" freq "$FREQ" >/dev/null 2>&1   # restore
+        [ "$NF" = "$((FREQ+1000))" ] && g "freq set/get round-trip OK (restored)" \
+            || w "freq round-trip mismatch (got $NF) — restored to $FREQ"
+    fi
+else
+    f "status failed: ${ST:-no reply}"; note_fail
+fi
+
+# ===========================================================================
+h "4. Audio devices (IC-7300 USB codec)"
+AD="$("$RADIO" audio-devices 2>/dev/null)"
+CAP=$(echo "$AD" | sed -n 's/.*"pulse_source": *"\([^"]*\)".*/\1/p' | head -1)
+SINK=$(echo "$AD" | sed -n 's/.*"pulse_sink": *"\([^"]*\)".*/\1/p' | head -1)
+ACAP=$(echo "$AD" | sed -n 's/.*"alsa_capture": *"\([^"]*\)".*/\1/p' | head -1)
+APLAY=$(echo "$AD" | sed -n 's/.*"alsa_playback": *"\([^"]*\)".*/\1/p' | head -1)
+if [ -n "$CAP" ] || [ -n "$ACAP" ]; then
+    g "RX capture device: ${CAP:-$ACAP}"
+else
+    f "no radio CAPTURE device (RX audio). Decoders won't work."
+    w "  If pactl shows the codec but name-match failed, add a hint to"
+    w "  hamradio/audio.py RADIO_NAME_HINTS."
+    note_fail
+fi
+if [ -n "$SINK" ] || [ -n "$APLAY" ]; then
+    g "TX playback device: ${SINK:-$APLAY}"
+else
+    w "no radio PLAYBACK device (TX audio). Voice/audio-CW TX won't route."
+fi
+
+# ===========================================================================
+if [ "$QUICK" = 0 ]; then
+h "5. RX decode smoke test (5s live capture)"
+if [ -n "$CAP" ] || [ -n "$ACAP" ]; then
+    echo "  Capturing 5s of whatever the radio currently hears..."
+    CW="$("$RADIO" cw --seconds 5 2>/dev/null | sed -n 's/.*"text": *"\([^"]*\)".*/\1/p')"
+    echo "  CW decoder output:     \"${CW}\""
+    SP="$("$RADIO" speech --seconds 5 2>/dev/null | sed -n 's/.*"text": *"\([^"]*\)".*/\1/p')"
+    echo "  Speech decoder output: \"${SP}\""
+    g "decoders ran (empty output is normal on a quiet/idle frequency)"
+    echo "  Tip: tune to a busy CW or SSB signal and re-run for a real test:"
+    echo "       radio mode CW && radio cw --seconds 20"
+else
+    w "skipped (no capture device)"
+fi
+fi
+
+# ===========================================================================
+h "6. Transmit test"
+if [ "$DO_TX" = 0 ]; then
+    echo "  Skipped. Re-run with --tx to test transmit (into a DUMMY LOAD)."
+else
+    echo "  TX test will key the transmitter."
+    printf "  Is a DUMMY LOAD (or safe antenna) connected? Type YES to proceed: "
+    read -r ANS
+    if [ "$ANS" != "YES" ]; then
+        w "TX test aborted (no confirmation)."
+    else
+        "$RADIO" tx-enable "power-on check TX test" >/dev/null
+        echo "  --- dry run (no keying) ---"
+        "$RADIO" send-cw "TEST DE KD9NWA" --wpm 20 --dry-run | jq_or_cat .
+        echo "  --- LIVE keyed CW id (short, into dummy load) ---"
+        R="$("$RADIO" send-cw "V V V DE KD9NWA" --wpm 20 --allow-tx 2>&1)"
+        echo "$R" | jq_or_cat .
+        "$RADIO" unkey >/dev/null 2>&1     # belt-and-suspenders
+        "$RADIO" tx-disable >/dev/null
+        if echo "$R" | grep -q '"sent": true'; then
+            g "TX CW test completed; PTT released; master switch disarmed"
+        else
+            f "TX test did not confirm send — check rig/keyer; PTT forced off"
+            note_fail
+        fi
+    fi
+fi
+
+# ===========================================================================
+h "Summary"
+if [ "$FAILS" -eq 0 ]; then
+    printf '  \033[32mAll critical checks passed.\033[0m Station ready.\n'
+    exit 0
+else
+    printf '  \033[31m%d critical check(s) failed.\033[0m See FAIL lines above.\n' "$FAILS"
+    exit 1
+fi

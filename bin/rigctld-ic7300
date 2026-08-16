@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# rigctld-ic7300 — launch rigctld for the IC-7300, auto-detecting the CP2102
+# CAT serial port. Waits for the radio to appear (it may be powered off), so
+# the systemd service can start at boot and "just work" once the rig comes on.
+#
+# IC-7300: hamlib model 3073. CI-V-over-USB default baud is 115200.
+set -u
+
+MODEL=3073
+BAUD="${IC7300_BAUD:-115200}"
+PORT_TCP=4532
+BIND=127.0.0.1
+
+find_cat() {
+    # Prefer the stable by-id symlink for the Silicon Labs CP2102 bridge.
+    for p in /dev/serial/by-id/*CP2102* /dev/serial/by-id/*Silicon_Labs* ; do
+        [ -e "$p" ] && { readlink -f "$p"; return 0; }
+    done
+    # Fallback: first ttyUSB/ttyACM whose USB vendor is Silicon Labs (10c4) or
+    # a CDC-ACM the IC-7300 exposes.
+    for dev in /dev/ttyUSB* /dev/ttyACM*; do
+        [ -e "$dev" ] || continue
+        echo "$dev"; return 0
+    done
+    return 1
+}
+
+echo "rigctld-ic7300: waiting for IC-7300 CAT serial device..."
+CAT=""
+# Wait up to (effectively) forever in short polls; systemd Restart handles crashes.
+for _ in $(seq 1 720); do   # ~1h of 5s polls, then let systemd restart us
+    if CAT="$(find_cat)"; then
+        echo "rigctld-ic7300: using CAT device $CAT @ ${BAUD} baud"
+        break
+    fi
+    sleep 5
+done
+
+if [ -z "${CAT}" ]; then
+    echo "rigctld-ic7300: no CAT device found (radio off?) — exiting for restart" >&2
+    exit 1
+fi
+
+exec /usr/bin/rigctld -m "$MODEL" -r "$CAT" -s "$BAUD" -t "$PORT_TCP" -T "$BIND"
