@@ -18,6 +18,7 @@ Returns the decoded text plus diagnostics (WPM estimate, tone, SNR, confidence)
 so callers can judge quality and tune.
 """
 from __future__ import annotations
+import re
 import wave
 import statistics
 from typing import Optional
@@ -310,3 +311,121 @@ def decode(path: str, tone: Optional[float] = None,
         except Exception as e:
             result["correct_error"] = str(e)
     return result
+
+
+def decode_windows(path: str, window_s: float = 4.0, hop_s: float = 3.0) -> list:
+    """Decode a long capture in overlapping short windows. CW isn't slot-timed,
+    so a fixed long capture mixes gaps and (worse) *multiple* stations at
+    different pitches. Short windows each lock to their own dominant tone, so we
+    copy one station at a time and skip the gaps. Returns a list of per-window
+    decode dicts (only those with a real signal)."""
+    sig, sr = _read_wav_mono(path)
+    win = int(sr * window_s)
+    hop = int(sr * hop_s)
+    results = []
+    tmp = None
+    import tempfile as _tf
+    for i in range(0, max(1, len(sig) - win + 1), hop):
+        seg = sig[i:i + win]
+        tone, snr = detect_tone(seg, sr)
+        if snr < 25 or not tone:
+            continue
+        # write the window to a temp wav and decode it
+        tmp = _tf.mktemp(suffix=".wav")
+        w = wave.open(tmp, "w"); w.setnchannels(1); w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes((np.clip(seg, -32768, 32767)).astype(np.int16).tobytes())
+        w.close()
+        r = decode(tmp)
+        import os as _os
+        try:
+            _os.unlink(tmp)
+        except OSError:
+            pass
+        if not r.get("note") and r.get("text"):
+            r["t_offset_s"] = round(i / sr, 1)
+            results.append(r)
+    return results
+
+
+def monitor(cycles: int = 6, seconds: float = 9.0, record_fn=None,
+            windowed: bool = True) -> dict:
+    """Copy CW over several receive cycles and *vote* on the content.
+
+    Weak/fading CW is copied by humans by waiting for repeats; this does the
+    same. It decodes `cycles` captures, keeps only the ungated ones, and votes:
+      * the CALLSIGN is chosen as the most-frequent callsign-shaped token that
+        (preferably) validates against the FCC DB;
+      * per-cycle corrected text and extracted fields are aggregated.
+    Returns the winning callsign (+ who it is), all cycle transcripts, and the
+    merged field set. Far more reliable than any single pass on a marginal sig.
+    """
+    import collections
+    if record_fn is None:
+        from . import audio
+        record_fn = lambda: audio.record_wav(seconds)
+    fcc = None
+    lookup = None
+    try:
+        from .location import fcc_lookup as fcc, lookup as lookup
+    except Exception:
+        pass
+
+    call_votes = collections.Counter()
+    fcc_calls = collections.Counter()
+    transcripts = []
+    merged: dict = {}
+    gated = 0
+
+    def _ingest(r):
+        txt = r.get("corrected", r.get("text", ""))
+        transcripts.append({"text": txt, "wpm": r.get("wpm"),
+                            "snr_ratio": r.get("snr_ratio"),
+                            "fields": r.get("fields", {})})
+        for k, v in r.get("fields", {}).items():
+            merged.setdefault(k, v)
+        for tok in txt.split():
+            core_m = re.search(r"[A-Z]{1,2}\d[A-Z]{1,4}", tok)
+            if core_m:
+                core = core_m.group(0)
+                call_votes[core] += 1
+                if fcc and fcc(core):
+                    fcc_calls[core] += 1
+
+    for _ in range(max(1, cycles)):
+        wav = record_fn()
+        if windowed:
+            wins = decode_windows(wav)
+            if not wins:
+                gated += 1
+            for r in wins:
+                _ingest(r)
+        else:
+            r = decode(wav)
+            if r.get("note"):
+                gated += 1
+                continue
+            _ingest(r)
+    # winning callsign: prefer FCC-validated, else most frequent
+    winner = None
+    if fcc_calls:
+        winner = fcc_calls.most_common(1)[0][0]
+    elif call_votes:
+        winner = call_votes.most_common(1)[0][0]
+    out = {
+        "decoder": "hamradio.cwdecode.monitor",
+        "cycles": cycles, "decoded_cycles": len(transcripts), "gated": gated,
+        "callsign": winner,
+        "callsign_votes": dict(call_votes.most_common(8)),
+        "fields": merged,
+        "transcripts": transcripts,
+    }
+    if winner and lookup:
+        try:
+            who = lookup(winner)
+            out["who"] = {k: who[k] for k in
+                          ("name", "city", "us_state", "country",
+                           "distance_km", "bearing_deg") if k in who}
+        except Exception:
+            pass
+    return out
