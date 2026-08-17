@@ -83,6 +83,12 @@ def main():
     p.add_argument("mode", nargs="?")
     p.add_argument("passband", nargs="?", type=int, default=0)
 
+    p = sub.add_parser("tune", help="run the antenna tuner on the current freq (do this after a band change)")
+    p.add_argument("--state", action="store_true", help="just read tuner state, don't tune")
+
+    p = sub.add_parser("freq-tune", help="set frequency AND auto-tune the antenna")
+    p.add_argument("hz", type=int)
+
     p = sub.add_parser("scan", help="band occupancy scan -> JSON (+optional PNG)")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--band", help="named band, e.g. 20m")
@@ -242,7 +248,7 @@ def main():
     _NO_RIG = {"js8", "js8-send", "js8-status", "js8-sms", "js8-email",
                "js8-inbox", "js8-store", "whois", "whois-rebuild",
                "whohearsme", "clock", "audio-devices",
-               "wspr-encode", "wspr-spots"}
+               "wspr-encode", "wspr-spots", "tune"}
     rig = None if args.cmd in _NO_RIG else Rig()
 
     try:
@@ -265,6 +271,17 @@ def main():
             else:
                 rig.set_freq(args.hz)
                 out({"freq_hz": rig.get_freq(), "set": True})
+
+        elif args.cmd == "tune":
+            from hamradio import antenna
+            out(antenna.tuner_state() if args.state else antenna.tune())
+
+        elif args.cmd == "freq-tune":
+            from hamradio import antenna
+            rig.set_freq(args.hz)
+            f = rig.get_freq()
+            t = antenna.tune()
+            out({"freq_hz": f, "tune": t})
 
         elif args.cmd == "mode":
             if args.mode is None:

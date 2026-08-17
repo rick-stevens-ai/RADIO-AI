@@ -246,3 +246,48 @@ Fully offline, fast. Three merged data sources:
 Agent tools: radio_whois ; radio_decode_ft8(locate=true).
 FCC EN.dat field map (0-idx): [4]=call [7]=name [16]=city [17]=state [18]=zip;
 active filter via HD.dat [5]=='A'. Import ~7 s for the whole DB.
+
+## Transmit hardware chain — critical settings (learned the hard way)
+
+For the IC-7300 to make real RF from computer-generated audio (FT8/WSPR/JS8):
+
+1. **DATA MOD source must be USB.** CI-V item `1A 05 00 66` = `03` (USB). If the
+   radio is power-cycled and this reverts (seen as `02`), every digital TX keys
+   the rig but produces **0 W / 0 ALC** (audio is ignored). Set it via CI-V:
+   `FE FE 94 E0 1A 05 00 66 03 FD`. It persists in the rig's memory once set.
+   Symptom to watch: `RFPOWER_METER_WATTS` and `ALC` both read 0 during TX.
+
+2. **Codec TX drive level.** The USB codec sink volume sets audio drive → ALC.
+   ~45% gives ALC ~0.9 at ~13-20 W. Persisted by the user service
+   `radio-audio-level.service` (re-applies on boot; PulseAudio/PipeWire resets it).
+
+3. **Antenna tuner after any band change.** `radio tune` runs the internal tuner
+   (CI-V `1C 01 02`, poll `1C 01` until `01`=matched). Without a match the rig
+   folds back power / high SWR. `radio freq-tune <hz>` sets freq + tunes.
+   NOTE: tuning ~8-9 s; if it times out at state `02` (still tuning), just run it
+   again.
+
+### Verifying TX without disturbing rigctld
+`cat /proc/asound/card1/pcm0p/sub0/status` → `state: RUNNING` == audio going to
+the codec. For actual watts, read `RIG_LEVEL_RFPOWER_METER_WATTS` via the Hamlib
+binding (same rigctld the CLI uses). During JS8/FT8 you'll see ~6 s at full watts
+then ~4 s at 0 W — that's the normal inter-frame gap, not a fault.
+
+## JS8Call + antenna tuner interaction (IMPORTANT ordering)
+
+`radio tune` (and anything that restarts rigctld) **severs JS8Call's persistent
+CAT link** — JS8Call then logs `write_block ... Broken pipe` /
+`network_open: failed to connect to 127.0.0.1:4532`, keeps decoding (audio is
+independent) but **cannot key PTT**, so a triggered "Send" toggles with no RF.
+Fix / correct order:
+  1. Set the band + **`radio tune`** FIRST (JS8Call not yet running, or expect to
+     restart it).
+  2. THEN start JS8Call (`hamradio.js8.ensure_running`) so it opens a fresh CAT
+     link. Verify with `RIG.GET_FREQ` → DIAL must be nonzero (0 == CAT dead).
+If JS8Call's CAT dies mid-session, just restart JS8Call.
+
+## SMS via SMSGTE needs the country code
+`format_sms()` now prefixes a bare 10-digit NANP number with `1`
+(`@16303860391`). Without the country code SMSGTE silently drops the message
+(email via EMAIL-2 worked without it, SMS did not). Confirmed: EMAIL-2 delivered
+end-to-end (RF → APRS igate → APRS-IS → email).

@@ -359,10 +359,13 @@ if not apps:
 app = apps[0]
 # Menu items we may need to check (Toggle sets desired state only if currently wrong).
 # We locate menu items by name; their STATE_CHECKED tells us current state.
+# NB: do NOT manage 'enable autoreply' here. Menu items report STATE_CHECKED
+# unreliably over AT-SPI (an item that isn't currently painted can read False),
+# so re-toggling autoreply was spuriously flipping it and disrupting a manual
+# Send. RX + TX + SPOT are what actually gate transmit / APRS forwarding.
 want = {
     "enable receiver (rx)": True,
     "enable transmitter (tx)": True,
-    "enable autoreply (auto)": True,
     "enable reporting (spot)": True,
 }
 found = {}
@@ -477,11 +480,25 @@ def _next_seq() -> str:
     return f"{{{_APRS_SEQ[0]:02d}"   # APRS line-number suffix, e.g. {07
 
 
+def _normalize_number(number: str) -> str:
+    """Normalize a phone number for SMSGTE, which needs the country code.
+    A bare 10-digit North-American number gets a leading '1'. Numbers already
+    carrying a country code (11+ digits, or a leading '+') are kept as-is.
+    """
+    plus = number.strip().startswith("+")
+    num = "".join(ch for ch in number if ch.isdigit())
+    if not plus and len(num) == 10:
+        num = "1" + num          # NANP country code
+    return num
+
+
 def format_sms(number: str, message: str) -> str:
     """Build the on-air JS8 string that relays an SMS via SMSGTE.
+    SMSGTE requires the country code (e.g. 1 for US), so a 10-digit US number
+    is prefixed with '1'.
     Result e.g.:  @APRSIS CMD :SMSGTE   :@13125551234 hello{01
     """
-    num = "".join(ch for ch in number if ch.isdigit())
+    num = _normalize_number(number)
     body = f"@{num} {message}".strip()
     return f"@APRSIS CMD :{_aprs_addr('SMSGTE')}:{body}{_next_seq()}"
 

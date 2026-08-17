@@ -237,11 +237,14 @@ def encode_wav(message: str, offset_hz: float = 1500.0,
 
 def transmit(call: str, grid: str, power_dbm: int, band: str, *,
              offset_hz: float = 1500.0, allow_tx: bool = False,
-             dry_run: bool = False, rig=None, align: bool = True) -> dict:
+             dry_run: bool = False, rig=None, align: bool = True,
+             do_tune: bool = True) -> dict:
     """Transmit a WSPR beacon 'CALL GRID PWR' in the next 2-minute window (GATED).
 
     rig: a hamradio.rig.Rig for tuning + keying (required for real TX).
-    Uses the existing TX safety gate via hamradio.tx.keyed().
+    do_tune: run the antenna tuner after setting the dial (needed after a band
+             change so the rig makes full, clean power). Uses the existing TX
+             safety gate via hamradio.tx.keyed().
     """
     message = f"{call.upper()} {grid.upper()[:4]} {int(power_dbm)}"
     dial = WSPR_DIAL.get(band)
@@ -259,6 +262,18 @@ def transmit(call: str, grid: str, power_dbm: int, band: str, *,
     from . import tx as txmod
     rig.set_freq(dial)
     rig.set_mode(DATA_MODE)
+    tune_result = None
+    if do_tune:
+        # antenna.tune() briefly stops/restarts rigctld; do it before keying and
+        # reconnect the rig afterwards.
+        from . import antenna
+        tune_result = antenna.tune()
+        try:
+            rig.reconnect()
+        except AttributeError:
+            pass
+        rig.set_freq(dial)
+        rig.set_mode(DATA_MODE)
     if align:
         wait_window()
     try:
@@ -267,7 +282,7 @@ def transmit(call: str, grid: str, power_dbm: int, band: str, *,
                 return {"tx": message, "dry_run": True}
             audiomod.play_wav(wav)
         return {"tx": message, "band": band, "dial_hz": dial,
-                "offset_hz": offset_hz, "sent": True}
+                "offset_hz": offset_hz, "sent": True, "tune": tune_result}
     finally:
         try:
             os.unlink(wav)
@@ -276,25 +291,63 @@ def transmit(call: str, grid: str, power_dbm: int, band: str, *,
 
 
 # --- who spots us (wsprnet.org) --------------------------------------------
-def who_spots(call: str = "KD9NWA", minutes: int = 60,
+def who_spots(call: str = "KD9NWA", minutes: int = 60, limit: int = 100,
               timeout: float = 30.0) -> dict:
-    """Query wsprnet.org for recent spots OF `call` (who heard us on WSPR)."""
-    # wsprnet's old query API: returns rows; we ask for spots where tx=call.
-    url = ("https://www.wsprnet.org/olddb?mode=html&band=all&limit=200"
-           f"&findcall={urllib.parse.quote(call)}&findreporter=&sort=date")
+    """Query wsprnet.org for recent spots OF `call` (who heard us on WSPR).
+
+    Uses the olddb query, which must be a POST with op=Update (a plain GET only
+    echoes the form). Columns returned by wsprnet are:
+      Date, Call(TX), MHz, SNR, Drift, Grid, dBm, W, Reporter, R-Grid, km, az, Mode
+    """
+    data = urllib.parse.urlencode({
+        "mode": "html", "band": "all", "limit": str(limit),
+        "findcall": call.upper(), "findreporter": "", "sort": "date",
+        "op": "Update",
+    }).encode()
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "hamradio/1.0"})
+        req = urllib.request.Request(
+            "https://wsprnet.org/olddb", data=data,
+            headers={"User-Agent": "Mozilla/5.0",
+                     "Content-Type": "application/x-www-form-urlencoded"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             html = resp.read().decode(errors="replace")
     except Exception as e:
         return {"error": str(e), "spots": []}
-    # crude table parse: rows contain date, call, freq, snr, ... reporter, ...
+
+    def _clean(c: str) -> str:
+        return re.sub(r"<[^>]+>", "", c).replace("&nbsp;", " ").strip()
+
     rows = re.findall(r"<tr[^>]*>(.*?)</tr>", html, re.S | re.I)
     spots = []
     for r in rows:
-        cells = [re.sub(r"<[^>]+>", "", c).strip()
-                 for c in re.findall(r"<td[^>]*>(.*?)</td>", r, re.S | re.I)]
-        if len(cells) >= 8 and call.upper() in " ".join(cells).upper():
-            spots.append(cells)
+        cells = [_clean(c) for c in re.findall(r"<td[^>]*>(.*?)</td>", r, re.S | re.I)]
+        if len(cells) < 11 or not re.match(r"20\d\d-\d\d-\d\d", cells[0]):
+            continue
+        # only rows where the TX call matches (we're asking who heard *us*)
+        if cells[1].upper() != call.upper():
+            continue
+        try:
+            km = float(cells[10])
+        except (ValueError, IndexError):
+            km = None
+        spots.append({
+            "time": cells[0], "tx_call": cells[1], "freq_mhz": cells[2],
+            "snr": _to_int(cells[3]), "drift": _to_int(cells[4]),
+            "tx_grid": cells[5], "power_dbm": _to_int(cells[6]),
+            "reporter": cells[8], "reporter_grid": cells[9],
+            "distance_km": km,
+            "azimuth": cells[11] if len(cells) > 11 else None,
+            "mode": cells[12] if len(cells) > 12 else None,
+        })
+    max_km = max((s["distance_km"] for s in spots if s["distance_km"]), default=0)
+    reporters = sorted({s["reporter"] for s in spots})
     return {"engine": "wsprnet", "callsign": call.upper(),
-            "n": len(spots), "rows": spots[:50]}
+            "n": len(spots), "unique_reporters": len(reporters),
+            "max_km": max_km, "spots": spots[:limit]}
+
+
+def _to_int(s: str):
+    try:
+        return int(float(s))
+    except (ValueError, TypeError):
+        return None
