@@ -106,6 +106,11 @@ def main():
     p.add_argument("--seconds", type=float, default=20.0,
                    help="capture length per cycle (decoded in 4s windows)")
 
+    p = sub.add_parser("cw-hunt", help="survey CW watering holes, rank by keying quality")
+    p.add_argument("--dwell", type=float, default=5.0, help="seconds per frequency")
+    p.add_argument("--copy", action="store_true",
+                   help="after the survey, park on the best clean CW and copy it")
+
     p = sub.add_parser("ft8", help="decode FT8 (WSJT-X jt9) from RX audio")
     p.add_argument("--band", help="auto-tune to this band's FT8 dial (e.g. 20m)")
     p.add_argument("--seconds", type=float, default=13.5)
@@ -235,6 +240,16 @@ def main():
         elif args.cmd == "cw-monitor":
             from hamradio import cwdecode as _cw
             out(_cw.monitor(cycles=args.cycles, seconds=args.seconds))
+
+        elif args.cmd == "cw-hunt":
+            from hamradio import cwdecode as _cw
+            res = _cw.hunt(lambda f: rig.set_freq(f),
+                           lambda m: rig.set_mode(m), dwell_s=args.dwell)
+            if args.copy and res.get("best"):
+                bf = res["best"]["freq_hz"]
+                rig.set_freq(bf); rig.set_mode("CW")
+                res["copy"] = _cw.monitor(cycles=3, seconds=18)
+            out(res)
 
         elif args.cmd == "ft8":
             if args.band:

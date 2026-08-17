@@ -195,7 +195,7 @@ def decode(path: str, tone: Optional[float] = None,
                 "snr_ratio": round(snr, 1), "wpm": None, "confidence": 0.0,
                 "note": "no CW signal (tone SNR below threshold)"}
 
-    env = _envelope(sig, sr, tone)
+    env = _envelope(sig, sr, tone)  # default 120 Hz: holds drifting notes
     state = _schmitt(env, sr)
     runs = _runs(state, sr)
     ons = [d for k, d in runs if k]
@@ -346,6 +346,62 @@ def decode_windows(path: str, window_s: float = 4.0, hop_s: float = 3.0) -> list
             r["t_offset_s"] = round(i / sr, 1)
             results.append(r)
     return results
+
+
+# CW watering holes — non-contest calling frequencies / activity centers (Hz).
+CW_WATERING_HOLES = {
+    # QRP calling frequencies
+    3560000: "QRP calling", 7030000: "QRP calling", 10106000: "QRP calling",
+    14060000: "QRP calling", 18096000: "QRP calling", 21060000: "QRP calling",
+    28060000: "QRP calling",
+    # SKCC (Straight Key Century Club) — slow hand-sent CW
+    3550000: "SKCC", 7055000: "SKCC", 7114000: "SKCC", 10120000: "SKCC",
+    14050000: "SKCC", 14114000: "SKCC", 21114000: "SKCC",
+    # FISTS (CW club) activity centers
+    7058000: "FISTS", 10118000: "FISTS", 14058000: "FISTS", 21058000: "FISTS",
+    # general rag-chew CW haunts
+    7035000: "rag-chew", 7040000: "rag-chew", 10110000: "rag-chew",
+    14045000: "rag-chew",
+}
+
+
+def hunt(set_freq_fn, set_mode_fn, record_fn=None, dwell_s: float = 5.0,
+         freqs=None) -> dict:
+    """Survey the CW watering holes and rank them by *keying quality* (not just
+    power). For each frequency: tune, capture `dwell_s`, and score by tone SNR
+    AND the envelope on/off ratio (clean CW keys hard on/off -> high ratio;
+    noise/data/carriers stay flat). Returns a ranked list so a caller can then
+    park on the best clean CW and copy it.
+    """
+    if record_fn is None:
+        from . import audio
+        record_fn = lambda: audio.record_wav(dwell_s)
+    freqs = freqs or sorted(CW_WATERING_HOLES)
+    rows = []
+    for f in freqs:
+        set_freq_fn(f)
+        set_mode_fn("CW")
+        import time as _t
+        _t.sleep(0.4)
+        sig, sr = _read_wav_mono(record_fn())
+        tone, snr = detect_tone(sig, sr)
+        ratio = 0.0
+        if tone:
+            env = _envelope(sig, sr, tone)
+            p15, p90 = np.percentile(env, [15, 90])
+            ratio = float(p90 / (p15 + 1e-9))
+        cw_like = snr > 20 and ratio > 3.0
+        rows.append({
+            "freq_hz": f, "label": CW_WATERING_HOLES.get(f, ""),
+            "tone_hz": round(tone) if tone else None,
+            "snr_ratio": round(snr, 1), "keying_ratio": round(ratio, 1),
+            "cw_like": cw_like,
+        })
+    rows.sort(key=lambda r: (r["cw_like"], r["keying_ratio"], r["snr_ratio"]),
+              reverse=True)
+    return {"decoder": "hamradio.cwdecode.hunt", "dwell_s": dwell_s,
+            "n": len(rows), "best": rows[0] if rows and rows[0]["cw_like"] else None,
+            "results": rows}
 
 
 def monitor(cycles: int = 6, seconds: float = 9.0, record_fn=None,

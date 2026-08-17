@@ -25,6 +25,7 @@ CLI + a [pi](https://github.com/earendil-works/pi) agent extension.
 | **Decode FT8** (WSJT-X `jt9`), weak-signal | `radio ft8 --band 20m --locate` | `radio_decode_ft8` |
 | **Decode CW / Morse** (built-in DSP decoder) | `radio cw [--method dsp\|multimon\|both]` | `radio_decode_cw` |
 | **Weak-signal CW copy** (multi-cycle voting) | `radio cw-monitor` | — |
+| **Find live CW** (survey watering holes) | `radio cw-hunt [--copy]` | — |
 | **Speech-to-text** (SSB, whisper.cpp) | `radio speech` | `radio_decode_speech` |
 | **Autonomous FT8 QSO** (answer a CQ) | `radio ft8-call <CALL> [GRID]` | `radio_ft8_call` |
 | **Call CQ** and work the first answer | `radio ft8-cq` | `radio_ft8_cq` |
@@ -74,6 +75,15 @@ separate stations), and **votes** on the callsign — preferring an FCC-validate
 token. This mirrors how humans copy weak CW by waiting for repeats. Proven
 on-air: voted out **AM4Q** (a Spanish contest station, ~6,800 km) from fading,
 fragmented copies across 16 windows.
+
+### CW watering-hole hunter (`cwdecode.hunt`)
+`radio cw-hunt` tunes through the well-known non-contest CW calling frequencies
+and activity centers — QRP calling (7.030/10.106/14.060…), **SKCC** straight-key
+haunts (7.055/10.120/14.050…), **FISTS** centers (7.058/10.118/14.058), and
+rag-chew segments — and ranks each by *keying quality*: not just tone SNR but the
+envelope on/off ratio, which distinguishes clean hand-sent CW from carriers,
+data, and noise. `--copy` then parks on the best clean signal and copies it.
+Great for finding an actual conversation instead of a contest pile-up.
 
 ### Autonomous FT8 QSO engine (`hamradio/ft8.py`)
 - **Encode:** [`kgoba/ft8_lib`](https://github.com/kgoba/ft8_lib) `gen_ft8` produces a
