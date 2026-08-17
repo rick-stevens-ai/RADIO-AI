@@ -27,6 +27,7 @@ CLI + a [pi](https://github.com/earendil-works/pi) agent extension.
 | **Weak-signal CW copy** (multi-cycle voting) | `radio cw-monitor` | — |
 | **Find live CW** (survey watering holes) | `radio cw-hunt [--copy]` | — |
 | **Speech-to-text** (SSB, whisper.cpp) | `radio speech` | `radio_decode_speech` |
+| **JS8Call messaging** (listen / send) | `radio js8 [--band]` · `js8-send` · `js8-status` | `radio_js8_listen`, `radio_js8_send`, `radio_js8_status` |
 | **Autonomous FT8 QSO** (answer a CQ) | `radio ft8-call <CALL> [GRID]` | `radio_ft8_call` |
 | **Call CQ** and work the first answer | `radio ft8-cq` | `radio_ft8_cq` |
 | Generate a standards-compliant FT8 WAV | `radio ft8-encode "<msg>"` | — |
@@ -85,6 +86,23 @@ envelope on/off ratio, which distinguishes clean hand-sent CW from carriers,
 data, and noise. `--copy` then parks on the best clean signal and copies it.
 Great for finding an actual conversation instead of a contest pile-up.
 
+### JS8Call keyboard-to-keyboard messaging (`hamradio/js8.py`)
+JS8Call is a *conversational* weak-signal mode built on the FT8 waveform —
+free-text messages, directed calls (`@CALL`), heartbeats, relays, store-and-
+forward. Rather than re-implement its message assembly, this drives the real
+JS8Call app headless (Xvfb) through its **TCP API** (JSON on :2442), sharing our
+`rigctld` for CAT. `radio js8` returns fully-assembled decoded messages with
+from/to/SNR (and the directed subset), optionally location-annotated; `js8-send`
+transmits (gated by the TX master switch). Proven on-air decoding live 40m JS8
+nets — heartbeats and directed greetings across the continent (e.g.
+`KF0DRT (MN): KR4FTX HELLO!`).
+
+> **Note on the JS8Call API:** it wedges if a client connects and disconnects in
+> quick succession, so this module uses a *single* long-lived socket per call
+> and probes liveness with `pgrep` (never a throw-away socket). It also avoids
+> opening a second `rigctld` link during a listen, which would starve JS8Call's
+> CAT polling and stall its decode loop.
+
 ### Autonomous FT8 QSO engine (`hamradio/ft8.py`)
 - **Encode:** [`kgoba/ft8_lib`](https://github.com/kgoba/ft8_lib) `gen_ft8` produces a
   real FT8 waveform — verified to decode in WSJT-X's own `jt9` (true interop).
@@ -131,6 +149,7 @@ hamradio/            core library (importable Python package)
   decode.py          FT8 (jt9) + CW + speech (whisper.cpp), + location enrich
   cwdecode.py        from-scratch DSP CW/Morse decoder (AGC + adaptive timing)
   cwcorrect.py       context-aware CW correction (re-segment, callsign/RST snap, fields)
+  js8.py             JS8Call driver via its TCP API (listen / send / status)
   ft8.py             autonomous FT8 QSO engine (ft8_lib encode + jt9 decode)
   generate.py        CW / TTS waveform generation for TX
   pskreporter.py     "who hears me" via PSKReporter
@@ -143,6 +162,7 @@ pi-extension/
   radio.ts           pi agent extension exposing ~23 radio_* tools
 systemd/
   rigctld.service    systemd --user unit (single serial owner; WSJT-X/fldigi multiplex)
+  js8call.service    systemd --user unit (JS8Call headless under Xvfb, API :2442)
 scripts/
   setup-location-db.sh
 docs/

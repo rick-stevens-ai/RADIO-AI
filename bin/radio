@@ -111,6 +111,19 @@ def main():
     p.add_argument("--copy", action="store_true",
                    help="after the survey, park on the best clean CW and copy it")
 
+    p = sub.add_parser("js8", help="listen to JS8Call messaging (via JS8Call API)")
+    p.add_argument("--band", help="set JS8 dial for this band first (e.g. 40m)")
+    p.add_argument("--seconds", type=float, default=60.0)
+    p.add_argument("--locate", action="store_true", help="annotate senders with location")
+
+    p = sub.add_parser("js8-send", help="send a JS8 message (GATED, keys the rig)")
+    p.add_argument("text", help="message text, e.g. '@ALLCALL HELLO DE KD9NWA'")
+    p.add_argument("--allow-tx", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+
+    p = sub.add_parser("js8-status", help="JS8Call state (running, station, dial, speed)")
+    p.add_argument("--band", help="set JS8 dial for this band (e.g. 40m)")
+
     p = sub.add_parser("ft8", help="decode FT8 (WSJT-X jt9) from RX audio")
     p.add_argument("--band", help="auto-tune to this band's FT8 dial (e.g. 20m)")
     p.add_argument("--seconds", type=float, default=13.5)
@@ -180,7 +193,13 @@ def main():
     p.add_argument("--out", required=True, help="output WAV path")
 
     args = ap.parse_args()
-    rig = Rig()
+    # JS8 commands are driven entirely through the JS8Call API (which owns CAT
+    # via its own rigctld connection); opening a second rigctld link here can
+    # starve JS8Call's CAT polling and stall its decode loop. So skip Rig() for
+    # those and any other command that doesn't touch the rig directly.
+    _NO_RIG = {"js8", "js8-send", "js8-status", "whois", "whois-rebuild",
+               "whohearsme", "clock", "audio-devices"}
+    rig = None if args.cmd in _NO_RIG else Rig()
 
     try:
         if args.cmd == "status":
@@ -250,6 +269,49 @@ def main():
                 rig.set_freq(bf); rig.set_mode("CW")
                 res["copy"] = _cw.monitor(cycles=3, seconds=18)
             out(res)
+
+        elif args.cmd == "js8":
+            from hamradio import js8 as js8mod
+            if args.band and args.band not in js8mod.JS8_DIAL:
+                out({"error": f"no JS8 dial for {args.band}"}); sys.exit(1)
+            res = js8mod.listen(args.seconds, band=args.band)
+            if args.locate:
+                for m in res.get("messages", []):
+                    call = m.get("from")
+                    if call:
+                        try:
+                            w = locmod.lookup(call)
+                            m["loc"] = {k: w[k] for k in ("country", "us_state",
+                                        "distance_km", "is_dx") if k in w}
+                        except Exception:
+                            pass
+            out(res)
+
+        elif args.cmd == "js8-send":
+            from hamradio import js8 as js8mod
+            armed = txmod.tx_globally_enabled()
+            allow = args.allow_tx and armed
+            out(js8mod.send(args.text, allow_tx=allow, dry_run=args.dry_run
+                            or not allow))
+
+        elif args.cmd == "js8-status":
+            from hamradio import js8 as js8mod
+            st = js8mod.ensure_running()          # pgrep-based, no socket churn
+            info = {"launch": st, "api": js8mod.is_running()}
+            if js8mod.is_running():
+                try:
+                    with js8mod.Js8Client(timeout=6.0) as c:
+                        if args.band:
+                            dial = js8mod.JS8_DIAL.get(args.band)
+                            if dial:
+                                c.set_dial(dial)
+                                import time as _t; _t.sleep(2.0)
+                        info["station"] = c.station()
+                        info["dial"] = c.get_freq()
+                        info["speed"] = c.get_speed()
+                except OSError as e:
+                    info["error"] = str(e)
+            out(info)
 
         elif args.cmd == "ft8":
             if args.band:

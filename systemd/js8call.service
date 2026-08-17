@@ -1,0 +1,13 @@
+[Unit]
+Description=JS8Call (headless, for agent JS8 messaging via TCP API)
+After=rigctld.service
+Wants=rigctld.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/xvfb-run -a -s "-screen 0 1024x768x16" /usr/bin/js8call
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

@@ -202,6 +202,72 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  // ---- JS8Call (keyboard-to-keyboard messaging) --------------------------
+  pi.registerTool({
+    name: "radio_js8_listen",
+    label: "Listen to JS8Call",
+    description:
+      "Listen to JS8Call weak-signal messaging traffic via the JS8Call TCP API " +
+      "(launches JS8Call headless if needed). JS8 is a conversational mode on " +
+      "the FT8 waveform: free-text, directed calls (@CALL), heartbeats, relays. " +
+      "Returns fully-assembled decoded messages with from/to/SNR, the directed " +
+      "(addressed) subset, and station/dial/speed. Optional band auto-tunes the " +
+      "JS8 dial (40m=7.078, 20m=14.078, etc). locate annotates senders with " +
+      "country/state/distance. Read-only.",
+    parameters: Type.Object({
+      band: Type.Optional(Type.String({ description: "JS8 dial band, e.g. 40m, 20m" })),
+      seconds: Type.Optional(Type.Number({ description: "Listen duration (default 60)" })),
+      locate: Type.Optional(Type.Boolean({ description: "Annotate senders with location" })),
+    }),
+    async execute(_id, p) {
+      const args = ["js8", "--seconds", String(p.seconds ?? 60)];
+      if (p.band) args.push("--band", p.band);
+      if (p.locate) args.push("--locate");
+      return asText(await radio(args, (Number(p.seconds ?? 60) + 40) * 1000));
+    },
+  });
+
+  pi.registerTool({
+    name: "radio_js8_status",
+    label: "JS8Call status",
+    description:
+      "Report JS8Call state: whether it's running, the station callsign/grid, " +
+      "current dial frequency and offset, and the submode/speed (Normal/Fast/" +
+      "Turbo/Slow). Optional band sets the JS8 dial. Read-only.",
+    parameters: Type.Object({
+      band: Type.Optional(Type.String({ description: "Set JS8 dial band, e.g. 40m" })),
+    }),
+    async execute(_id, p) {
+      const args = ["js8-status"];
+      if (p.band) args.push("--band", p.band);
+      return asText(await radio(args, 45000));
+    },
+  });
+
+  pi.registerTool({
+    name: "radio_js8_send",
+    label: "Send JS8 message",
+    description:
+      "Send a JS8Call message (free-text or directed, e.g. '@ALLCALL HELLO DE " +
+      "KD9NWA' or 'W1ABC HI'). GATED: JS8Call keys the rig, so the TX master " +
+      "switch must be armed. Confirms before transmitting; use dry_run to preview.",
+    parameters: Type.Object({
+      text: Type.String({ description: "Message text to send" }),
+      dry_run: Type.Optional(Type.Boolean({ description: "Preview, do not transmit" })),
+    }),
+    async execute(_id, p, _sig, _upd, ctx) {
+      const args = ["js8-send", p.text];
+      if (p.dry_run) { args.push("--dry-run"); }
+      else {
+        const ok = await ctx.ui.confirm("Send JS8 message?",
+          `Transmit "${p.text}" as KD9NWA via JS8Call? This keys the rig.`);
+        if (!ok) return asText({ aborted: "user declined" });
+        args.push("--allow-tx");
+      }
+      return asText(await radio(args, 30000));
+    },
+  });
+
   // ---- clock health ------------------------------------------------------
   pi.registerTool({
     name: "radio_clock_sync",
