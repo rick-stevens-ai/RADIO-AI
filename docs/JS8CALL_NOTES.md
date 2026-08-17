@@ -68,3 +68,45 @@ So from our agent we simply `TX.SEND_MESSAGE` the `@APRSIS CMD ...` string
 - WSJT-X itself has a WSPR mode for TX/RX + auto-upload to wsprnet.org.
 - WSPR message = `CALL GRID4 dBm` (e.g. `KD9NWA EN51 30`). 4-FSK, 1.4648 baud,
   ~6 Hz wide, 110.6 s TX in the 2-minute (even-UTC) window.
+
+## Headless TX trigger (SOLVED — the crucial gotcha)
+
+Driving JS8Call transmit **purely via the TCP API fails headless**. `TX.SEND_MESSAGE`
+enqueues text and `processTxQueue()` calls `toggleTx(true)` → `startTxButton->setChecked(true)`,
+but the on-air keying never fires (Qt `setChecked()` under Xvfb doesn't drive the
+transmit the way a real click does). Every message silently vanished from the buffer
+with no PTT.
+
+**Root causes / requirements (all must hold):**
+1. **rigctld must be healthy and JS8Call must own the CAT link cleanly.** Do NOT poke
+   rigctld (`nc`/rigctl) while JS8Call is running — extra connections exhaust its tiny
+   LISTEN backlog and trigger JS8Call's *"Rig Control Error — reconfigure?"* modal,
+   which then blocks all TX (`RIG.FREQ` returns DIAL=0). Fix: restart rigctld, then
+   start JS8Call fresh; verify `RIG.GET_FREQ` shows a real DIAL.
+2. **Monitoring (RX) must be ON.** `Control ▸ Enable Receiver (RX)`. With RX off,
+   JS8Call's frame-cycle engine (which schedules TX at 15 s boundaries) doesn't run,
+   so nothing transmits. Also need **Enable Transmitter (TX)** and, for the SMS/APRS
+   path, **Enable Reporting (SPOT)**. Autoreply helps queued sends fire.
+   The `.ini` keys (`MonitorOFF`, `TransmitOFF`, `AutoreplyOnAtStartup`) are **not
+   reliably applied at startup** — set the runtime toggles.
+3. **The real transmit trigger is the "Send" button**, which is a *checkable* widget
+   whose accessible name is `Send (<duration>)` (e.g. "Send (1m 20s)"). Actuate it via
+   **AT-SPI** (accessibility bus): `node.queryAction().doAction(0)` (Toggle).
+
+**Our implementation** (`hamradio/js8.py`):
+- `ensure_running()` launches Xvfb :99 + **openbox** (WM, so dialogs/menus get focus)
+  + a **dbus session running the AT-SPI bus** (`QT_ACCESSIBILITY=1`,
+  `at-spi-bus-launcher`) + JS8Call. (systemd unit `systemd/js8call.service` does the same.)
+- `ensure_tx_ready()` sets the RX/TX/Autoreply/SPOT menu toggles ON via AT-SPI menu
+  items (reads `STATE_CHECKED`, only toggles if wrong) — self-heals the session.
+- `send()` = `TX.SET_TEXT` (load compose box) → `ensure_tx_ready()` → `_trigger_tx()`
+  (AT-SPI Toggle of the `Send (...)` button). Verified on-air: the USB codec playback
+  (`/proc/asound/card1/pcm0p/sub0/status`) goes `RUNNING` for the full estimated TX
+  duration — real keying, confirmed for an `@APRSIS CMD :SMSGTE ...` SMS.
+
+**Verifying TX without disturbing rigctld:** watch
+`cat /proc/asound/card1/pcm0p/sub0/status` — `state: RUNNING` == transmitting audio to
+the rig codec. (Reading rigctld PTT directly can wedge JS8Call's CAT — avoid it.)
+
+Packages added on the box: `xdotool`, `openbox`, `imagemagick`, `tesseract-ocr`,
+`python3-pyatspi`, `at-spi2-core`.

@@ -59,18 +59,43 @@ def api_up(timeout: float = 1.5) -> bool:
         return False
 
 
-def ensure_running(wait_s: float = 30.0) -> dict:
-    """Start JS8Call headless (Xvfb) if it isn't already running.
+# Launcher: Xvfb (:99) + a lightweight WM (openbox, so menus/dialogs get focus)
+# + a dbus session with the AT-SPI accessibility bus, then JS8Call. Accessibility
+# is REQUIRED so _trigger_tx() can actuate the real 'Send' button; the WM is
+# needed for reliable dialog handling under Xvfb.
+JS8_DISPLAY = ":99"
+_LAUNCHER = '''#!/bin/bash
+export DISPLAY=%(disp)s
+export QT_ACCESSIBILITY=1
+export QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1
+export NO_AT_BRIDGE=0
+pgrep -f "Xvfb %(disp)s" >/dev/null || (Xvfb %(disp)s -screen 0 1200x800x16 >/tmp/xvfb99.log 2>&1 &)
+sleep 2
+pgrep -x openbox >/dev/null || (openbox >/tmp/openbox.log 2>&1 &)
+sleep 1
+dbus-run-session -- bash -c "
+  /usr/libexec/at-spi-bus-launcher --launch-immediately &
+  sleep 2
+  js8call 2>&1 | tee /tmp/js8call.log
+"
+''' % {"disp": JS8_DISPLAY}
+
+
+def ensure_running(wait_s: float = 40.0) -> dict:
+    """Start JS8Call headless if it isn't already running, with a WM + the
+    AT-SPI accessibility bus enabled (needed to actually trigger transmit).
 
     IMPORTANT: probe with pgrep, NOT by opening a TCP socket. JS8Call's API
     wedges if a client connects and disconnects immediately before another
     connects, so we must avoid any throw-away socket before the real one."""
     if is_running():
         return {"started": False, "api": True, "note": "already running"}
-    subprocess.Popen(
-        ["tmux", "new-session", "-d", "-s", "js8",
-         'xvfb-run -a -s "-screen 0 1024x768x16" js8call 2>&1 | tee /tmp/js8call.log'],
-    )
+    import os, tempfile
+    path = os.path.join(tempfile.gettempdir(), "start_js8.sh")
+    with open(path, "w") as f:
+        f.write(_LAUNCHER)
+    os.chmod(path, 0o755)
+    subprocess.Popen(["tmux", "new-session", "-d", "-s", "js8", path])
     t0 = time.time()
     while time.time() - t0 < wait_s:
         if api_up():
@@ -267,20 +292,166 @@ def listen(seconds: float = 60.0, station_info: bool = True,
             "directed": directed, "messages": msgs}
 
 
+def _js8_dbus_env() -> Optional[dict]:
+    """Return the environment (incl. DBUS_SESSION_BUS_ADDRESS + DISPLAY) of the
+    running js8call process, so we can talk to its AT-SPI accessibility bus."""
+    import os
+    try:
+        pid = subprocess.check_output(
+            ["pgrep", "-f", "js8call"]).decode().split()[0]
+    except (subprocess.CalledProcessError, IndexError):
+        return None
+    env = {}
+    try:
+        with open(f"/proc/{pid}/environ", "rb") as f:
+            for kv in f.read().split(b"\0"):
+                if b"=" in kv:
+                    k, v = kv.split(b"=", 1)
+                    env[k.decode(errors="replace")] = v.decode(errors="replace")
+    except OSError:
+        return None
+    out = dict(os.environ)
+    for k in ("DBUS_SESSION_BUS_ADDRESS", "DISPLAY", "XAUTHORITY"):
+        if env.get(k):
+            out[k] = env[k]
+    out["QT_ACCESSIBILITY"] = "1"
+    return out
+
+
+_ATSPI_TRIGGER = r'''
+import sys
+try:
+    import pyatspi
+except Exception as e:
+    print("NO_PYATSPI", e); sys.exit(2)
+d = pyatspi.Registry.getDesktop(0)
+apps = [a for a in d if (a.name or "") == "JS8Call"]
+if not apps:
+    print("NO_JS8CALL_IN_A11Y"); sys.exit(3)
+app = apps[0]
+target = [None]
+def walk(n):
+    try:
+        if target[0] is not None: return
+        if (n.name or "").lower().startswith("send ("):
+            target[0] = n; return
+        for i in range(n.childCount): walk(n.getChildAtIndex(i))
+    except Exception:
+        pass
+walk(app)
+if target[0] is None:
+    print("NO_SEND_BUTTON"); sys.exit(4)
+target[0].queryAction().doAction(0)   # Toggle -> start TX on next frame
+print("TX_TRIGGERED", target[0].name)
+'''
+
+
+_ATSPI_ENSURE = r'''
+import sys
+try:
+    import pyatspi
+except Exception as e:
+    print("NO_PYATSPI", e); sys.exit(2)
+d = pyatspi.Registry.getDesktop(0)
+apps = [a for a in d if (a.name or "") == "JS8Call"]
+if not apps:
+    print("NO_JS8CALL_IN_A11Y"); sys.exit(3)
+app = apps[0]
+# Menu items we may need to check (Toggle sets desired state only if currently wrong).
+# We locate menu items by name; their STATE_CHECKED tells us current state.
+want = {
+    "enable receiver (rx)": True,
+    "enable transmitter (tx)": True,
+    "enable autoreply (auto)": True,
+    "enable reporting (spot)": True,
+}
+found = {}
+def walk(n):
+    try:
+        nm = (n.name or "").lower()
+        if nm in want:
+            st = n.getState()
+            found[nm] = (n, st.contains(pyatspi.STATE_CHECKED))
+        for i in range(n.childCount): walk(n.getChildAtIndex(i))
+    except Exception:
+        pass
+walk(app)
+changed = []
+for nm, desired in want.items():
+    if nm in found:
+        node, checked = found[nm]
+        if checked != desired:
+            try:
+                node.queryAction().doAction(0)  # Press -> toggles menu item
+                changed.append(nm)
+            except Exception as e:
+                print("ERR toggling", nm, e)
+print("ENSURED", "changed=" + ",".join(changed) if changed else "already_ok",
+      "present=" + ",".join(sorted(found)))
+'''
+
+
+def ensure_tx_ready() -> dict:
+    """Make sure JS8Call's session toggles allow transmit: Enable Receiver (RX),
+    Enable Transmitter (TX), Enable Autoreply, Enable Reporting (SPOT). These are
+    runtime UI states (not reliably restored from the .ini), and TX will silently
+    do nothing if RX/monitoring is off. Uses AT-SPI menu items."""
+    env = _js8_dbus_env()
+    if not env:
+        return {"ok": False, "note": "js8call process/env not found"}
+    try:
+        r = subprocess.run(["python3", "-c", _ATSPI_ENSURE], env=env,
+                           capture_output=True, text=True, timeout=25)
+        return {"ok": r.returncode == 0,
+                "detail": (r.stdout + r.stderr).strip()}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "note": "ensure_tx_ready timed out"}
+
+
+def _trigger_tx() -> dict:
+    """Click JS8Call's 'Send' button via the accessibility (AT-SPI) bus.
+
+    JS8Call's TCP API can load message text but, run headless, its
+    TX.SEND_MESSAGE path does not reliably fire the transmit toggle (Qt
+    setChecked() doesn't drive the on-air keying). The robust trigger is to
+    actuate the real 'Send (<duration>)' toggle button, which we reach through
+    AT-SPI. Requires JS8Call started with QT_ACCESSIBILITY=1 under a dbus
+    session (see ensure_running / systemd unit).
+    """
+    env = _js8_dbus_env()
+    if not env:
+        return {"triggered": False, "note": "js8call process/env not found"}
+    try:
+        r = subprocess.run(["python3", "-c", _ATSPI_TRIGGER], env=env,
+                           capture_output=True, text=True, timeout=25)
+        out = (r.stdout + r.stderr).strip()
+        return {"triggered": r.returncode == 0, "detail": out}
+    except subprocess.TimeoutExpired:
+        return {"triggered": False, "note": "a11y trigger timed out"}
+
+
 def send(text: str, *, allow_tx: bool = False, dry_run: bool = False) -> dict:
-    """Queue a JS8 message for transmission via JS8Call.
+    """Queue a JS8 message and actually transmit it via JS8Call.
 
     GATED: JS8Call will key the rig to send this. The caller must pass
     allow_tx=True (which the CLI/agent only does after the TX master switch is
     armed and the band is verified). dry_run reports what *would* be sent.
+
+    Working recipe (verified on-air): load the text with TX.SET_TEXT, then fire
+    the real 'Send' toggle over AT-SPI (_trigger_tx). Requires JS8Call to have
+    Monitor(RX) ON, Enable Transmitter(TX) ON, and be running with
+    accessibility enabled.
     """
     if dry_run or not allow_tx:
         return {"queued": False, "dry_run": True, "text": text,
                 "note": "TX not armed (need allow_tx + TX master switch)"}
     ensure_running()
+    ready = ensure_tx_ready()   # RX/TX/autoreply/SPOT must be ON for TX to fire
     with Js8Client() as c:
-        c.send_raw("TX.SEND_MESSAGE", text)
-    return {"queued": True, "text": text}
+        c.send_raw("TX.SET_TEXT", text)   # load into compose box (persists)
+    time.sleep(1.0)
+    trig = _trigger_tx()
+    return {"queued": True, "text": text, "tx": trig, "ready": ready}
 
 
 # ---------------------------------------------------------------------------
