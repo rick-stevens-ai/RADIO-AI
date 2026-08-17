@@ -4,13 +4,10 @@
 - [x] Basic JS8Call API integration (listen / send / status) — `hamradio/js8.py`
 - [x] Diagnose + fix API flakiness (single long-lived socket; pgrep liveness;
       no 2nd rigctld link during listen) — see docs/JS8CALL_NOTES.md
-- [ ] **SMS via JS8Call → APRS-IS → SMSGTE.** Add `js8-sms <number> <text>` that
-      arms TX and sends `@APRSIS CMD :SMSGTE   :@<number> <text>{NN`. Verify
-      config `spot_to_aprs=true`, `spot_to_reporting_networks=true`, and a valid
-      APRS passcode. Also `js8-email <addr> <text>` via `:EMAIL-2`.
-- [ ] **Message queue / inbox.** Wrap `INBOX.GET_MESSAGES` / `INBOX.STORE_MESSAGE`
-      as `js8-inbox` (list) and `js8-store <call> <text>` (leave a message for a
-      station). Surface directed-message relay (`CALL>CALL text`).
+- [x] **SMS via JS8Call → APRS-IS → SMSGTE.** `js8-sms` / `js8-email` built.
+      (JS8Call auto-derives the APRS passcode from APJ8CL, so only SpotToAPRS=true
+      is required — verified. On-air format matches the source exactly.)
+- [x] **Message queue / inbox.** `js8-inbox` (list) + `js8-store <call> <text>` built.
 - [ ] Persistent JS8 listener daemon (one socket, publishes decodes to a file /
       the agent) instead of per-command connects — smoother for long monitoring.
 - [ ] Auto-reply / directed-message watcher: notify (or auto-ACK) when someone

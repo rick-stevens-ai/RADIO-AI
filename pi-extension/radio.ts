@@ -268,6 +268,69 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  pi.registerTool({
+    name: "radio_js8_sms",
+    label: "Send SMS via JS8/APRS",
+    description:
+      "Send a text message to a phone number over the air: JS8Call relays it via " +
+      "APRS-IS to the SMSGTE gateway (@APRSIS CMD :SMSGTE). GATED: keys the rig, " +
+      "so the TX master switch must be armed. Confirms first; dry_run previews " +
+      "the exact on-air string. Keep messages short (radio is slow).",
+    parameters: Type.Object({
+      number: Type.String({ description: "Destination phone number (digits)" }),
+      message: Type.String({ description: "Short SMS text" }),
+      dry_run: Type.Optional(Type.Boolean({ description: "Preview only" })),
+    }),
+    async execute(_id, p, _sig, _upd, ctx) {
+      const args = ["js8-sms", p.number, p.message];
+      if (p.dry_run) { args.push("--dry-run"); }
+      else {
+        const ok = await ctx.ui.confirm("Send SMS over the air?",
+          `Text ${p.number}: "${p.message}" via JS8->APRS->SMSGTE as KD9NWA?`);
+        if (!ok) return asText({ aborted: "user declined" });
+        args.push("--allow-tx");
+      }
+      return asText(await radio(args, 30000));
+    },
+  });
+
+  pi.registerTool({
+    name: "radio_js8_email",
+    label: "Send email via JS8/APRS",
+    description:
+      "Send an email over the air via JS8Call -> APRS-IS -> the EMAIL-2 gateway. " +
+      "GATED (keys the rig; TX master switch required). Confirms first; dry_run " +
+      "previews. Keep it short.",
+    parameters: Type.Object({
+      address: Type.String({ description: "Destination email address" }),
+      message: Type.String({ description: "Short message text" }),
+      dry_run: Type.Optional(Type.Boolean({ description: "Preview only" })),
+    }),
+    async execute(_id, p, _sig, _upd, ctx) {
+      const args = ["js8-email", p.address, p.message];
+      if (p.dry_run) { args.push("--dry-run"); }
+      else {
+        const ok = await ctx.ui.confirm("Send email over the air?",
+          `Email ${p.address}: "${p.message}" via JS8->APRS as KD9NWA?`);
+        if (!ok) return asText({ aborted: "user declined" });
+        args.push("--allow-tx");
+      }
+      return asText(await radio(args, 30000));
+    },
+  });
+
+  pi.registerTool({
+    name: "radio_js8_inbox",
+    label: "JS8Call inbox",
+    description:
+      "List messages stored in JS8Call's inbox (store-and-forward messages left " +
+      "for us by other stations). Read-only.",
+    parameters: Type.Object({}),
+    async execute() {
+      return asText(await radio(["js8-inbox"], 15000));
+    },
+  });
+
   // ---- clock health ------------------------------------------------------
   pi.registerTool({
     name: "radio_clock_sync",

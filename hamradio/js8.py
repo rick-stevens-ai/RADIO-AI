@@ -281,3 +281,112 @@ def send(text: str, *, allow_tx: bool = False, dry_run: bool = False) -> dict:
     with Js8Client() as c:
         c.send_raw("TX.SEND_MESSAGE", text)
     return {"queued": True, "text": text}
+
+
+# ---------------------------------------------------------------------------
+# SMS / email via APRS-IS (JS8Call gates @APRSIS CMD traffic to APRS-IS itself)
+# ---------------------------------------------------------------------------
+# When we transmit a directed message to the group @APRSIS with a " CMD " verb,
+# JS8Call's spotAprsCmd() forwards the text verbatim as an APRS third-party
+# packet: FROMCALL>APJ8CL,qAS,BYCALL:<text>  (see docs/JS8CALL_NOTES.md). The
+# text is a normal APRS message: ":ADDRESSEE:body{NN" where ADDRESSEE is padded
+# to 9 chars. Well-known APRS message gateways:
+#   SMSGTE  -> SMS   (addressee "SMSGTE", body "@<number> <text>")
+#   EMAIL-2 -> email (addressee "EMAIL-2", body "<addr> <text>")
+_APRS_SEQ = [0]
+
+
+def _aprs_addr(call: str) -> str:
+    """APRS message addressee field is exactly 9 chars, space-padded."""
+    return f"{call:<9}"[:9]
+
+
+def _next_seq() -> str:
+    _APRS_SEQ[0] = (_APRS_SEQ[0] + 1) % 100
+    return f"{{{_APRS_SEQ[0]:02d}"   # APRS line-number suffix, e.g. {07
+
+
+def format_sms(number: str, message: str) -> str:
+    """Build the on-air JS8 string that relays an SMS via SMSGTE.
+    Result e.g.:  @APRSIS CMD :SMSGTE   :@13125551234 hello{01
+    """
+    num = "".join(ch for ch in number if ch.isdigit())
+    body = f"@{num} {message}".strip()
+    return f"@APRSIS CMD :{_aprs_addr('SMSGTE')}:{body}{_next_seq()}"
+
+
+def format_email(address: str, message: str) -> str:
+    """Build the on-air JS8 string that relays an email via the EMAIL-2 gateway.
+    Result e.g.:  @APRSIS CMD :EMAIL-2  :you@example.com hi{02
+    """
+    body = f"{address} {message}".strip()
+    return f"@APRSIS CMD :{_aprs_addr('EMAIL-2')}:{body}{_next_seq()}"
+
+
+def _aprs_ready() -> dict:
+    """Best-effort check that JS8Call will actually gate to APRS-IS."""
+    import os
+    ini = os.path.expanduser("~/.config/JS8Call.ini")
+    ok = {"spot_to_aprs": None, "note": ""}
+    try:
+        txt = open(ini).read()
+        ok["spot_to_aprs"] = "SpotToAPRS=true" in txt
+    except OSError:
+        ok["note"] = "could not read JS8Call.ini"
+    return ok
+
+
+def send_sms(number: str, message: str, *, allow_tx: bool = False,
+             dry_run: bool = False) -> dict:
+    """Send an SMS to a phone number via JS8 -> APRS-IS -> SMSGTE (GATED).
+
+    Note: this transmits an APRS message over the air; delivery depends on the
+    SMSGTE gateway and APRS-IS reachability. JS8Call must have SpotToAPRS=true.
+    """
+    onair = format_sms(number, message)
+    ready = _aprs_ready()
+    r = send(onair, allow_tx=allow_tx, dry_run=dry_run)
+    r.update({"kind": "sms", "to": number, "message": message,
+              "onair": onair, "aprs": ready})
+    return r
+
+
+def send_email(address: str, message: str, *, allow_tx: bool = False,
+               dry_run: bool = False) -> dict:
+    """Send an email via JS8 -> APRS-IS -> EMAIL-2 gateway (GATED)."""
+    onair = format_email(address, message)
+    ready = _aprs_ready()
+    r = send(onair, allow_tx=allow_tx, dry_run=dry_run)
+    r.update({"kind": "email", "to": address, "message": message,
+              "onair": onair, "aprs": ready})
+    return r
+
+
+# ---------------------------------------------------------------------------
+# Inbox / store-and-forward
+# ---------------------------------------------------------------------------
+def inbox(timeout: float = 6.0) -> dict:
+    """Fetch stored inbox messages (INBOX.GET_MESSAGES -> INBOX.MESSAGES)."""
+    ensure_running()
+    msgs = []
+    try:
+        with Js8Client(timeout=timeout) as c:
+            m = c.request("INBOX.GET_MESSAGES", "INBOX.MESSAGES", timeout=timeout)
+            if m:
+                p = m.get("params", {})
+                msgs = p.get("MESSAGES", []) or []
+    except OSError as e:
+        return {"error": str(e), "messages": []}
+    return {"engine": "js8call", "n": len(msgs), "messages": msgs}
+
+
+def store(callsign: str, message: str, *, allow_tx: bool = False,
+          dry_run: bool = False) -> dict:
+    """Leave a directed message for `callsign` (store-and-forward). Sending a
+    directed message that the target isn't currently hearing lets relaying
+    stations hold it; on our side we transmit 'CALL MSG'. GATED."""
+    onair = f"{callsign.upper()} {message}"
+    r = send(onair, allow_tx=allow_tx, dry_run=dry_run)
+    r.update({"kind": "store", "to": callsign.upper(), "message": message,
+              "onair": onair})
+    return r

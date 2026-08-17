@@ -124,6 +124,26 @@ def main():
     p = sub.add_parser("js8-status", help="JS8Call state (running, station, dial, speed)")
     p.add_argument("--band", help="set JS8 dial for this band (e.g. 40m)")
 
+    p = sub.add_parser("js8-sms", help="send an SMS via JS8->APRS-IS->SMSGTE (GATED)")
+    p.add_argument("number", help="destination phone number (digits)")
+    p.add_argument("message", help="SMS text")
+    p.add_argument("--allow-tx", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+
+    p = sub.add_parser("js8-email", help="send email via JS8->APRS-IS->EMAIL-2 (GATED)")
+    p.add_argument("address", help="destination email address")
+    p.add_argument("message", help="email text")
+    p.add_argument("--allow-tx", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+
+    p = sub.add_parser("js8-inbox", help="list JS8Call stored inbox messages")
+
+    p = sub.add_parser("js8-store", help="leave a directed message for a station (GATED)")
+    p.add_argument("callsign")
+    p.add_argument("message")
+    p.add_argument("--allow-tx", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+
     p = sub.add_parser("ft8", help="decode FT8 (WSJT-X jt9) from RX audio")
     p.add_argument("--band", help="auto-tune to this band's FT8 dial (e.g. 20m)")
     p.add_argument("--seconds", type=float, default=13.5)
@@ -197,7 +217,8 @@ def main():
     # via its own rigctld connection); opening a second rigctld link here can
     # starve JS8Call's CAT polling and stall its decode loop. So skip Rig() for
     # those and any other command that doesn't touch the rig directly.
-    _NO_RIG = {"js8", "js8-send", "js8-status", "whois", "whois-rebuild",
+    _NO_RIG = {"js8", "js8-send", "js8-status", "js8-sms", "js8-email",
+               "js8-inbox", "js8-store", "whois", "whois-rebuild",
                "whohearsme", "clock", "audio-devices"}
     rig = None if args.cmd in _NO_RIG else Rig()
 
@@ -293,6 +314,28 @@ def main():
             allow = args.allow_tx and armed
             out(js8mod.send(args.text, allow_tx=allow, dry_run=args.dry_run
                             or not allow))
+
+        elif args.cmd == "js8-sms":
+            from hamradio import js8 as js8mod
+            allow = args.allow_tx and txmod.tx_globally_enabled()
+            out(js8mod.send_sms(args.number, args.message, allow_tx=allow,
+                                dry_run=args.dry_run or not allow))
+
+        elif args.cmd == "js8-email":
+            from hamradio import js8 as js8mod
+            allow = args.allow_tx and txmod.tx_globally_enabled()
+            out(js8mod.send_email(args.address, args.message, allow_tx=allow,
+                                  dry_run=args.dry_run or not allow))
+
+        elif args.cmd == "js8-inbox":
+            from hamradio import js8 as js8mod
+            out(js8mod.inbox())
+
+        elif args.cmd == "js8-store":
+            from hamradio import js8 as js8mod
+            allow = args.allow_tx and txmod.tx_globally_enabled()
+            out(js8mod.store(args.callsign, args.message, allow_tx=allow,
+                             dry_run=args.dry_run or not allow))
 
         elif args.cmd == "js8-status":
             from hamradio import js8 as js8mod
