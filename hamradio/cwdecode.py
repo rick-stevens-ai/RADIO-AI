@@ -166,8 +166,16 @@ def _split_threshold(values):
     return best_t
 
 
-def decode(path: str, tone: Optional[float] = None) -> dict:
-    """Decode CW from a WAV file. Returns text + diagnostics."""
+def decode(path: str, tone: Optional[float] = None,
+           smart: bool = True) -> dict:
+    """Decode CW from a WAV file. Returns text + diagnostics.
+
+    smart=True runs the context-aware correction pass (hamradio.cwcorrect):
+    re-segments run-together text, snaps near-miss callsigns (validated against
+    the local FCC DB) and RST reports, and extracts QSO fields. The raw decode
+    is always preserved under 'text'; corrections appear under 'corrected' /
+    'fields' / 'corrections'.
+    """
     sig, sr = _read_wav_mono(path)
     if tone is None:
         tone, snr = detect_tone(sig, sr)
@@ -280,7 +288,7 @@ def decode(path: str, tone: Optional[float] = None) -> dict:
     regularity = min(1.0, bimodality / 3.0)
     conf = round(0.7 * decodability + 0.3 * regularity, 2)
 
-    return {
+    result = {
         "decoder": "hamradio.cwdecode",
         "text": decoded,
         "tone_hz": round(tone),
@@ -290,3 +298,15 @@ def decode(path: str, tone: Optional[float] = None) -> dict:
         "elements": len(ons),
         "confidence": conf,
     }
+    if smart and decoded:
+        try:
+            from . import cwcorrect
+            fcc = None
+            try:
+                from .location import fcc_lookup as fcc
+            except Exception:
+                fcc = None
+            result.update(cwcorrect.correct(decoded, fcc_lookup=fcc))
+        except Exception as e:
+            result["correct_error"] = str(e)
+    return result

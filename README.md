@@ -51,6 +51,20 @@ regularity checks) so it stays silent instead of emitting garbage. Proven on-air
 decoding live CQs and callsigns (e.g. `CQ DE AA8P`). `--method both` runs the
 legacy multimon-ng path side-by-side for comparison.
 
+### Intelligent CW correction pass (`hamradio/cwcorrect.py`)
+Real ops run letters together and QSB garbles characters; humans copy through it
+using *context*. This pass encodes that knowledge (on by default):
+- **re-segments** run-together text against a CW vocabulary/prosign set
+  (`CQCQDE` → `CQ CQ DE`),
+- **snaps RST** reports (`5NN` → `599`),
+- **extracts a valid callsign core** from garbled tokens (`HEAA8P` → `AA8P`) and
+  **validates/repairs callsigns against the local FCC database** — but only when
+  the match is *unambiguous* (a single 1-edit licensed neighbor), so it never
+  fabricates,
+- **parses the QSO grammar** into structured fields
+  (`cq`, `call`, `rst`, `name`, `qth`, `sign_off`).
+The raw decode is always preserved; corrections are additive and logged.
+
 ### Autonomous FT8 QSO engine (`hamradio/ft8.py`)
 - **Encode:** [`kgoba/ft8_lib`](https://github.com/kgoba/ft8_lib) `gen_ft8` produces a
   real FT8 waveform — verified to decode in WSJT-X's own `jt9` (true interop).
@@ -96,6 +110,7 @@ hamradio/            core library (importable Python package)
   audio.py           RX capture from the IC-7300 USB codec
   decode.py          FT8 (jt9) + CW + speech (whisper.cpp), + location enrich
   cwdecode.py        from-scratch DSP CW/Morse decoder (AGC + adaptive timing)
+  cwcorrect.py       context-aware CW correction (re-segment, callsign/RST snap, fields)
   ft8.py             autonomous FT8 QSO engine (ft8_lib encode + jt9 decode)
   generate.py        CW / TTS waveform generation for TX
   pskreporter.py     "who hears me" via PSKReporter
