@@ -178,6 +178,14 @@ def main():
 
     p = sub.add_parser("text-quota", help="check Textbelt SMS credit remaining")
 
+    p = sub.add_parser("relay", help="JS8->SMS gateway: listen off-air for directed SMS/NOTIFY commands and forward")
+    p.add_argument("--seconds", type=float, default=60.0, help="listen window length")
+    p.add_argument("--cycles", type=int, default=1, help="number of windows (0=forever)")
+    p.add_argument("--band", help="set JS8 band first, e.g. 40m")
+    p.add_argument("--sms-provider", default="textbelt")
+    p.add_argument("--notify-provider", default="ntfy")
+    p.add_argument("--dry-run", action="store_true", help="decode + parse but do not forward")
+
     p = sub.add_parser("js8-store", help="leave a directed message for a station (GATED)")
     p.add_argument("callsign")
     p.add_argument("message")
@@ -261,7 +269,7 @@ def main():
                "js8-inbox", "js8-store", "whois", "whois-rebuild",
                "whohearsme", "clock", "audio-devices",
                "wspr-encode", "wspr-spots", "tune",
-               "text", "text-quota"}
+               "text", "text-quota", "relay"}
     rig = None if args.cmd in _NO_RIG else Rig()
 
     try:
@@ -418,6 +426,25 @@ def main():
         elif args.cmd == "text-quota":
             from hamradio import messaging
             out(messaging.textbelt_quota())
+
+        elif args.cmd == "relay":
+            from hamradio import relay as relaymod, js8 as js8mod
+            if args.band:
+                dial = js8mod.JS8_DIAL.get(args.band)
+                if dial:
+                    js8mod.ensure_running()
+                    with js8mod.Js8Client() as _c:
+                        _c.set_dial(dial)
+            if args.cycles == 1:
+                out(relaymod.listen_once(seconds=args.seconds,
+                                         sms_provider=args.sms_provider,
+                                         notify_provider=args.notify_provider,
+                                         dry_run=args.dry_run))
+            else:
+                out(relaymod.run(cycles=args.cycles, seconds=args.seconds,
+                                 sms_provider=args.sms_provider,
+                                 notify_provider=args.notify_provider,
+                                 dry_run=args.dry_run))
 
         elif args.cmd == "js8-store":
             from hamradio import js8 as js8mod
