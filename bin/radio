@@ -98,6 +98,8 @@ def main():
     p = sub.add_parser("cw", help="decode Morse from RX audio")
     p.add_argument("--seconds", type=float, default=20.0)
     p.add_argument("--wav", help="decode an existing WAV instead of capturing")
+    p.add_argument("--method", choices=["dsp", "multimon", "both"], default="dsp",
+                   help="dsp=built-in DSP decoder (default), multimon=legacy, both=compare")
 
     p = sub.add_parser("ft8", help="decode FT8 (WSJT-X jt9) from RX audio")
     p.add_argument("--band", help="auto-tune to this band's FT8 dial (e.g. 20m)")
@@ -222,7 +224,8 @@ def main():
             out(summary)
 
         elif args.cmd == "cw":
-            out(decodemod.decode_cw(wav_path=args.wav, seconds=args.seconds))
+            out(decodemod.decode_cw(wav_path=args.wav, seconds=args.seconds,
+                                    method=args.method))
 
         elif args.cmd == "ft8":
             if args.band:

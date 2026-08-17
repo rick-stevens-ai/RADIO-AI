@@ -61,18 +61,30 @@ def detect_cw_tone(wav_path: str, lo_hz: int = 300, hi_hz: int = 1200):
 
 
 def decode_cw(wav_path: Optional[str] = None, seconds: float = 20.0,
-              bandpass: bool = True) -> dict:
+              bandpass: bool = True, method: str = "dsp") -> dict:
     """Decode CW from a WAV (or a fresh live capture of `seconds`).
 
-    If bandpass=True, auto-detects the CW tone pitch and band-pass filters a
-    narrow window around it before decoding (greatly helps multimon-ng on
-    weak/noisy signals). Returns text + the detected tone/SNR so callers can
-    judge signal quality. Requires multimon-ng + sox.
+    method="dsp"  -> hamradio.cwdecode, our from-scratch DSP decoder (default).
+                     Envelope + AGC + Schmitt-trigger + adaptive dit/dah &
+                     gap timing. Far better than multimon-ng on real off-air CW;
+                     also reports wpm/confidence.
+    method="multimon" -> legacy multimon-ng MORSE_CW path (kept for comparison).
+    method="both" -> run both and return each under 'dsp'/'multimon'.
     """
-    if not shutil.which("multimon-ng"):
-        raise RuntimeError("multimon-ng not installed")
     if wav_path is None:
         wav_path = audio.record_wav(seconds)
+
+    if method in ("dsp", "both"):
+        from . import cwdecode
+        dsp = cwdecode.decode(wav_path)
+        dsp["source"] = wav_path
+        if method == "dsp":
+            return dsp
+
+    if not shutil.which("multimon-ng"):
+        if method == "both":
+            return {"dsp": dsp, "multimon": {"error": "multimon-ng not installed"}}
+        raise RuntimeError("multimon-ng not installed")
 
     tone, snr = detect_cw_tone(wav_path)
 
@@ -106,6 +118,12 @@ def decode_cw(wav_path: Optional[str] = None, seconds: float = 20.0,
         elif line.strip():
             decoded.append(line.strip())
     text = " ".join(decoded).strip()
+    mm = {"decoder": "multimon-ng/MORSE_CW", "text": text,
+          "raw": out, "source": wav_path,
+          "tone_hz": round(tone) if tone else None,
+          "snr_ratio": round(snr, 1)}
+    if method == "both":
+        return {"dsp": dsp, "multimon": mm}
     return {"decoder": "multimon-ng/MORSE_CW", "text": text,
             "raw": out, "source": wav_path,
             "tone_hz": round(tone) if tone else None,

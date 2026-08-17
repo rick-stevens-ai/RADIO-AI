@@ -23,7 +23,7 @@ CLI + a [pi](https://github.com/earendil-works/pi) agent extension.
 | Rig telemetry / QSY (never TX) | `radio status` · `radio freq` · `radio mode` | `radio_status`, `radio_set_freq`, `radio_set_mode` |
 | **Band scan → usage map** (JSON + PNG) | `radio scan --band 20m --plot out.png` | `radio_scan_band` |
 | **Decode FT8** (WSJT-X `jt9`), weak-signal | `radio ft8 --band 20m --locate` | `radio_decode_ft8` |
-| **Decode CW / Morse** | `radio cw` | `radio_decode_cw` |
+| **Decode CW / Morse** (built-in DSP decoder) | `radio cw [--method dsp\|multimon\|both]` | `radio_decode_cw` |
 | **Speech-to-text** (SSB, whisper.cpp) | `radio speech` | `radio_decode_speech` |
 | **Autonomous FT8 QSO** (answer a CQ) | `radio ft8-call <CALL> [GRID]` | `radio_ft8_call` |
 | **Call CQ** and work the first answer | `radio ft8-cq` | `radio_ft8_cq` |
@@ -39,6 +39,17 @@ Every command emits **JSON**, so it composes cleanly for agents and scripts.
 ---
 
 ## Highlights
+
+### From-scratch CW decoder (`hamradio/cwdecode.py`)
+A real DSP Morse decoder that beats `multimon-ng` on off-air signals:
+band-pass around the auto-detected note → envelope detection → **AGC
+normalization** (survives QSB/fading) → **Schmitt-trigger** slicing → adaptive
+dit/dah and letter/word **timing clustering** (self-tunes to the sender's WPM and
+tracks drift) → Morse table. Reports `wpm`, `tone_hz`, `snr_ratio`, and a
+`confidence`, and **gates out noise-only captures** (SNR / speed / keying-
+regularity checks) so it stays silent instead of emitting garbage. Proven on-air
+decoding live CQs and callsigns (e.g. `CQ DE AA8P`). `--method both` runs the
+legacy multimon-ng path side-by-side for comparison.
 
 ### Autonomous FT8 QSO engine (`hamradio/ft8.py`)
 - **Encode:** [`kgoba/ft8_lib`](https://github.com/kgoba/ft8_lib) `gen_ft8` produces a
@@ -83,7 +94,8 @@ hamradio/            core library (importable Python package)
   tx.py              GATED transmit (master switch, band guard, fail-safe)
   scan.py            band-occupancy scan → JSON + matplotlib PNG
   audio.py           RX capture from the IC-7300 USB codec
-  decode.py          FT8 (jt9) + CW (multimon-ng) + speech (whisper.cpp), +location enrich
+  decode.py          FT8 (jt9) + CW + speech (whisper.cpp), + location enrich
+  cwdecode.py        from-scratch DSP CW/Morse decoder (AGC + adaptive timing)
   ft8.py             autonomous FT8 QSO engine (ft8_lib encode + jt9 decode)
   generate.py        CW / TTS waveform generation for TX
   pskreporter.py     "who hears me" via PSKReporter

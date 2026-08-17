@@ -113,15 +113,21 @@ export default function (pi: ExtensionAPI) {
     name: "radio_decode_cw",
     label: "Decode CW/Morse",
     description:
-      "Capture RX audio for `seconds` and decode Morse (CW) to text via " +
-      "multimon-ng. Set the radio to CW mode on the target signal first. " +
-      "Requires the radio to be powered on (USB audio codec present).",
+      "Capture RX audio for `seconds` and decode Morse (CW) to text using a " +
+      "built-in DSP decoder (envelope + AGC + Schmitt trigger + adaptive dit/" +
+      "dah & gap timing) that is far more robust than multimon-ng on real off-" +
+      "air CW. Returns text plus wpm, tone_hz, snr_ratio and a confidence; " +
+      "noise-only captures are gated out (empty text + a 'note'). Set the radio " +
+      "to CW on the target signal first. method: dsp (default) | multimon | " +
+      "both (compare). Requires the radio powered on.",
     parameters: Type.Object({
       seconds: Type.Optional(Type.Number({ description: "Capture length (default 20)" })),
+      method: Type.Optional(Type.String({ description: "dsp | multimon | both" })),
     }),
     async execute(_id, p) {
-      return asText(await radio(["cw", "--seconds", String(p.seconds ?? 20)],
-        (Number(p.seconds ?? 20) + 60) * 1000));
+      const args = ["cw", "--seconds", String(p.seconds ?? 20)];
+      if (p.method) args.push("--method", p.method);
+      return asText(await radio(args, (Number(p.seconds ?? 20) + 60) * 1000));
     },
   });
 
