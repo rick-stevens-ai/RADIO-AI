@@ -122,6 +122,9 @@ _DXCC = [
     ("DK", "Germany", 51.2, 10.4), ("DM", "Germany", 51.2, 10.4),
     ("DO", "Germany", 51.2, 10.4),
     ("I", "Italy", 41.9, 12.6), ("EA", "Spain", 40.4, -3.7),
+    # Spanish special-event/contest prefixes AM/AN/AO (must precede US 'A')
+    ("AM", "Spain", 40.4, -3.7), ("AN", "Spain", 40.4, -3.7),
+    ("AO", "Spain", 40.4, -3.7),
     ("EB", "Spain", 40.4, -3.7), ("EC", "Spain", 40.4, -3.7),
     ("CT", "Portugal", 39.4, -8.2), ("CU", "Azores", 38.5, -28.2),
     ("PA", "Netherlands", 52.1, 5.3), ("PB", "Netherlands", 52.1, 5.3),

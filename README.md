@@ -24,6 +24,7 @@ CLI + a [pi](https://github.com/earendil-works/pi) agent extension.
 | **Band scan → usage map** (JSON + PNG) | `radio scan --band 20m --plot out.png` | `radio_scan_band` |
 | **Decode FT8** (WSJT-X `jt9`), weak-signal | `radio ft8 --band 20m --locate` | `radio_decode_ft8` |
 | **Decode CW / Morse** (built-in DSP decoder) | `radio cw [--method dsp\|multimon\|both]` | `radio_decode_cw` |
+| **Weak-signal CW copy** (multi-cycle voting) | `radio cw-monitor` | — |
 | **Speech-to-text** (SSB, whisper.cpp) | `radio speech` | `radio_decode_speech` |
 | **Autonomous FT8 QSO** (answer a CQ) | `radio ft8-call <CALL> [GRID]` | `radio_ft8_call` |
 | **Call CQ** and work the first answer | `radio ft8-cq` | `radio_ft8_cq` |
@@ -64,6 +65,15 @@ using *context*. This pass encodes that knowledge (on by default):
 - **parses the QSO grammar** into structured fields
   (`cq`, `call`, `rst`, `name`, `qth`, `sign_off`).
 The raw decode is always preserved; corrections are additive and logged.
+
+### Weak-signal CW copy by voting (`cwdecode.monitor`)
+CW isn't slot-timed, so a single capture may land in a gap or mix two stations
+at different pitches. `radio cw-monitor` copies over several cycles, decodes each
+in short windows (each locking to its own dominant tone to skip gaps and
+separate stations), and **votes** on the callsign — preferring an FCC-validated
+token. This mirrors how humans copy weak CW by waiting for repeats. Proven
+on-air: voted out **AM4Q** (a Spanish contest station, ~6,800 km) from fading,
+fragmented copies across 16 windows.
 
 ### Autonomous FT8 QSO engine (`hamradio/ft8.py`)
 - **Encode:** [`kgoba/ft8_lib`](https://github.com/kgoba/ft8_lib) `gen_ft8` produces a
