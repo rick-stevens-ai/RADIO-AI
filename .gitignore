@@ -14,3 +14,4 @@ logs/*.adi
 TX_ENABLED
 *.wav
 .DS_Store
+secrets.env

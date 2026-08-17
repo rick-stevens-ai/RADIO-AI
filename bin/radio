@@ -166,6 +166,18 @@ def main():
     p.add_argument("--call", default=MY_CALL)
     p.add_argument("--minutes", type=int, default=60)
 
+    p = sub.add_parser("text", help="send SMS/notification via a third-party relay (internet)")
+    p.add_argument("message", help="message text")
+    p.add_argument("--provider", default="ntfy",
+                   choices=["textbelt", "ntfy", "telegram"],
+                   help="relay provider (default ntfy)")
+    p.add_argument("--to", help="phone number (textbelt) / topic (ntfy) / chat id (telegram)")
+    p.add_argument("--title", help="notification title (ntfy)")
+    p.add_argument("--test", action="store_true", help="textbelt test mode (no delivery)")
+    p.add_argument("--dry-run", action="store_true")
+
+    p = sub.add_parser("text-quota", help="check Textbelt SMS credit remaining")
+
     p = sub.add_parser("js8-store", help="leave a directed message for a station (GATED)")
     p.add_argument("callsign")
     p.add_argument("message")
@@ -248,7 +260,8 @@ def main():
     _NO_RIG = {"js8", "js8-send", "js8-status", "js8-sms", "js8-email",
                "js8-inbox", "js8-store", "whois", "whois-rebuild",
                "whohearsme", "clock", "audio-devices",
-               "wspr-encode", "wspr-spots", "tune"}
+               "wspr-encode", "wspr-spots", "tune",
+               "text", "text-quota"}
     rig = None if args.cmd in _NO_RIG else Rig()
 
     try:
@@ -395,6 +408,16 @@ def main():
         elif args.cmd == "wspr-spots":
             from hamradio import wspr as wsprmod
             out(wsprmod.who_spots(args.call, minutes=args.minutes))
+
+        elif args.cmd == "text":
+            from hamradio import messaging
+            out(messaging.notify(args.message, provider=args.provider,
+                                 to=args.to, title=args.title,
+                                 test=args.test, dry_run=args.dry_run))
+
+        elif args.cmd == "text-quota":
+            from hamradio import messaging
+            out(messaging.textbelt_quota())
 
         elif args.cmd == "js8-store":
             from hamradio import js8 as js8mod
