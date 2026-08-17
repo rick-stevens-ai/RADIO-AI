@@ -331,6 +331,67 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  // ---- WSPR (propagation beacon) -----------------------------------------
+  pi.registerTool({
+    name: "radio_wspr_receive",
+    label: "Receive WSPR",
+    description:
+      "Capture one aligned 2-minute WSPR window and decode it with wsprd. WSPR " +
+      "is an ultra-weak-signal propagation beacon mode (decodes far below noise). " +
+      "Returns spots (call/grid/power_dbm/SNR/drift/freq) annotated with " +
+      "location + distance. Takes ~2-3 minutes (waits for the window). Read-only.",
+    parameters: Type.Object({
+      band: Type.Optional(Type.String({ description: "WSPR band, e.g. 40m, 20m (default 20m)" })),
+    }),
+    async execute(_id, p) {
+      return asText(await radio(["wspr", "--band", p.band ?? "20m"], 220000));
+    },
+  });
+
+  pi.registerTool({
+    name: "radio_wspr_spots",
+    label: "WSPR spots of us",
+    description:
+      "Query wsprnet.org for recent WSPR spots OF a callsign (who heard our " +
+      "beacon, and where). Like the FT8 'who hears me' but for WSPR. Read-only.",
+    parameters: Type.Object({
+      call: Type.Optional(Type.String({ description: "Callsign (default KD9NWA)" })),
+      minutes: Type.Optional(Type.Integer({ description: "Look-back window (default 60)" })),
+    }),
+    async execute(_id, p) {
+      const args = ["wspr-spots", "--minutes", String(p.minutes ?? 60)];
+      if (p.call) args.push("--call", p.call);
+      return asText(await radio(args, 45000));
+    },
+  });
+
+  pi.registerTool({
+    name: "radio_wspr_beacon",
+    label: "Transmit WSPR beacon",
+    description:
+      "Transmit a WSPR beacon (KD9NWA + grid + power) in the next 2-minute " +
+      "window so receivers worldwide spot us on wsprnet.org. GATED: keys the " +
+      "rig, TX master switch required; confirms first. Use low power. dry_run " +
+      "previews. After beaconing, check radio_wspr_spots to see reach.",
+    parameters: Type.Object({
+      band: Type.Optional(Type.String({ description: "Band, e.g. 40m, 20m (default 20m)" })),
+      power_dbm: Type.Optional(Type.Integer({ description: "Reported power dBm (30=1W, 37=5W)" })),
+      dry_run: Type.Optional(Type.Boolean({ description: "Preview only" })),
+    }),
+    async execute(_id, p, _sig, _upd, ctx) {
+      const args = ["wspr-tx", "--band", p.band ?? "20m",
+                    "--power", String(p.power_dbm ?? 30)];
+      if (p.dry_run) { args.push("--dry-run"); }
+      else {
+        const ok = await ctx.ui.confirm("Transmit WSPR beacon?",
+          `Beacon KD9NWA on ${p.band ?? "20m"} at ${p.power_dbm ?? 30} dBm? Keys the rig for ~2 min.`);
+        if (!ok) return asText({ aborted: "user declined" });
+        args.push("--allow-tx");
+      }
+      return asText(await radio(args, 200000));
+    },
+  });
+
   // ---- clock health ------------------------------------------------------
   pi.registerTool({
     name: "radio_clock_sync",

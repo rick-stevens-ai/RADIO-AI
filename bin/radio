@@ -138,6 +138,28 @@ def main():
 
     p = sub.add_parser("js8-inbox", help="list JS8Call stored inbox messages")
 
+    p = sub.add_parser("wspr", help="receive+decode one WSPR 2-min window")
+    p.add_argument("--band", default="20m", help="WSPR band (e.g. 40m, 20m)")
+    p.add_argument("--no-align", action="store_true", help="do not wait for the 2-min window")
+    p.add_argument("--no-locate", action="store_true")
+
+    p = sub.add_parser("wspr-tx", help="transmit a WSPR beacon (GATED)")
+    p.add_argument("--band", default="20m")
+    p.add_argument("--power", type=int, default=30, help="reported power dBm (30=1W)")
+    p.add_argument("--offset", type=float, default=1500.0)
+    p.add_argument("--allow-tx", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--no-align", action="store_true")
+
+    p = sub.add_parser("wspr-encode", help="generate a WSPR beacon WAV (no TX)")
+    p.add_argument("message", help="'CALL GRID dBm' e.g. 'KD9NWA EN51 30'")
+    p.add_argument("--offset", type=float, default=1500.0)
+    p.add_argument("--out", required=True)
+
+    p = sub.add_parser("wspr-spots", help="wsprnet.org: who has spotted us on WSPR")
+    p.add_argument("--call", default=MY_CALL)
+    p.add_argument("--minutes", type=int, default=60)
+
     p = sub.add_parser("js8-store", help="leave a directed message for a station (GATED)")
     p.add_argument("callsign")
     p.add_argument("message")
@@ -219,7 +241,8 @@ def main():
     # those and any other command that doesn't touch the rig directly.
     _NO_RIG = {"js8", "js8-send", "js8-status", "js8-sms", "js8-email",
                "js8-inbox", "js8-store", "whois", "whois-rebuild",
-               "whohearsme", "clock", "audio-devices"}
+               "whohearsme", "clock", "audio-devices",
+               "wspr-encode", "wspr-spots"}
     rig = None if args.cmd in _NO_RIG else Rig()
 
     try:
@@ -330,6 +353,31 @@ def main():
         elif args.cmd == "js8-inbox":
             from hamradio import js8 as js8mod
             out(js8mod.inbox())
+
+        elif args.cmd == "wspr":
+            from hamradio import wspr as wsprmod
+            out(wsprmod.receive(args.band, align=not args.no_align,
+                                set_rig=lambda hz, m: (rig.set_freq(hz), rig.set_mode(m)),
+                                enrich=not args.no_locate))
+
+        elif args.cmd == "wspr-tx":
+            from hamradio import wspr as wsprmod
+            allow = args.allow_tx and txmod.tx_globally_enabled()
+            out(wsprmod.transmit(MY_CALL, MY_GRID[:4], args.power, args.band,
+                                 offset_hz=args.offset, allow_tx=allow,
+                                 dry_run=args.dry_run or not allow, rig=rig,
+                                 align=not args.no_align))
+
+        elif args.cmd == "wspr-encode":
+            from hamradio import wspr as wsprmod
+            pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+            wav = wsprmod.encode_wav(args.message, offset_hz=args.offset,
+                                     out_path=args.out)
+            out({"wav": wav, "message": args.message, "offset_hz": args.offset})
+
+        elif args.cmd == "wspr-spots":
+            from hamradio import wspr as wsprmod
+            out(wsprmod.who_spots(args.call, minutes=args.minutes))
 
         elif args.cmd == "js8-store":
             from hamradio import js8 as js8mod

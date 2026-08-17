@@ -14,14 +14,12 @@
       directs a message to KD9NWA.
 
 ## WSPR (new capability)
-- [ ] **WSPR RX decode**: `radio wspr` — tune the WSPR dial for a band, capture a
-      2-minute (even-UTC-aligned) window, decode with `wsprd`, return spots
-      (call/grid/dBm/SNR/drift/freq) + optional location enrichment.
-- [ ] **WSPR beacon TX** (gated): generate the 4-FSK WSPR waveform for
-      `KD9NWA EN51 <dBm>` and transmit in the 2-min window. Low power / long
-      unattended runs — great propagation beacon.
-- [ ] **wsprnet.org**: optionally upload our RX spots, and/or query the wsprnet
-      API for where KD9NWA is being heard (like `whohearsme` but for WSPR).
+- [x] **WSPR RX decode**: `radio wspr` — aligned 2-min capture -> wsprd -> spots
+      with location. Verified on-air (9 spots incl. Ecuador 5108 km).
+- [x] **WSPR beacon TX** (gated): `radio wspr-tx` — Python 4-FSK generator (via
+      wsprsim symbols), verified decodable by wsprd. Not yet keyed on-air.
+- [x] **wsprnet.org query**: `radio wspr-spots` — who has spotted a call (verified).
+      (Uploading our own RX spots to wsprnet: still optional/TODO.)
 - [ ] WSPR dial table (USB dial freqs): 80m 3.5686, 40m 7.0386, 30m 10.1387,
       20m 14.0956, 17m 18.1046, 15m 21.0946, 10m 28.1246 MHz.
 
