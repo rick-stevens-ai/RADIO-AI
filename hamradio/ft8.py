@@ -74,6 +74,66 @@ class QSOLog:
         return asdict(self)
 
 
+ADIF_LOG = os.path.expanduser("~/radio/logs/kd9nwa.adi")
+
+
+def _band_name(hz: int) -> str:
+    """Map a dial/frequency in Hz to an ADIF band string."""
+    mhz = hz / 1e6
+    bands = [
+        (1.8, 2.0, "160m"), (3.5, 4.0, "80m"), (5.3, 5.4, "60m"),
+        (7.0, 7.3, "40m"), (10.1, 10.15, "30m"), (14.0, 14.35, "20m"),
+        (18.0, 18.2, "17m"), (21.0, 21.45, "15m"), (24.8, 25.0, "12m"),
+        (28.0, 29.7, "10m"), (50.0, 54.0, "6m"), (144.0, 148.0, "2m"),
+    ]
+    for lo, hi, name in bands:
+        if lo <= mhz <= hi:
+            return name
+    return f"{mhz:.3f}MHz"
+
+
+def _adif_field(name: str, value: str) -> str:
+    value = str(value)
+    return f"<{name}:{len(value)}>{value}"
+
+
+def log_qso_adif(log: "QSOLog", *, path: str = ADIF_LOG) -> str:
+    """Append a completed QSO to the ADIF log. Returns the log path.
+    Only writes if a dx_call is present. Idempotent-ish: callers should only
+    log completed QSOs."""
+    if not log.dx_call:
+        return ""
+    freq_mhz = f"{(log.band_hz or 0) / 1e6:.3f}"
+    now = time.gmtime()
+    date = time.strftime("%Y%m%d", now)
+    tm = time.strftime("%H%M%S", now)
+    parts = [
+        _adif_field("CALL", log.dx_call),
+    ]
+    if log.dx_grid:
+        parts.append(_adif_field("GRIDSQUARE", log.dx_grid))
+    parts += [
+        _adif_field("BAND", _band_name(log.band_hz or 0)),
+        _adif_field("FREQ", freq_mhz),
+        _adif_field("MODE", "FT8"),
+    ]
+    if log.rst_sent:
+        parts.append(_adif_field("RST_SENT", log.rst_sent))
+    if log.rst_rcvd:
+        parts.append(_adif_field("RST_RCVD", log.rst_rcvd))
+    parts += [
+        _adif_field("QSO_DATE", date),
+        _adif_field("TIME_ON", tm),
+        _adif_field("STATION_CALLSIGN", log.my_call),
+        _adif_field("MY_GRIDSQUARE", log.my_grid),
+        "<EOR>",
+    ]
+    pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as fh:
+        fh.write("".join(parts) + "\n")
+    return path
+
+
 def _now_slot_parity() -> int:
     """0 if the CURRENT 15s slot starts at an even 30s mark (0/30), else 1."""
     t = int(time.time())
@@ -267,6 +327,11 @@ def answer_cq(rig: Rig, dxcall: str, dxgrid: str, my_call: str, my_grid: str,
             break
 
     log.completed = stage in ("signoff", "done")
+    if log.completed and not dry_run:
+        try:
+            log_qso_adif(log)
+        except Exception:
+            pass
     return log.to_dict()
 
 
@@ -345,5 +410,11 @@ def call_cq(rig: Rig, my_call: str, my_grid: str, *,
         if stage == "done":
             break
 
+    # A QSO where we sent RR73 counts as complete on our side.
     log.completed = stage in ("rr73", "done") and bool(log.dx_call)
+    if log.completed and not dry_run:
+        try:
+            log_qso_adif(log)
+        except Exception:
+            pass
     return log.to_dict()

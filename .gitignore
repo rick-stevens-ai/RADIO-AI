@@ -15,3 +15,9 @@ TX_ENABLED
 *.wav
 .DS_Store
 secrets.env
+# relay chain secrets & runtime state (cherryrd watcher)
+relay.env
+seen.json
+relay.log
+relay/logs/
+relay/seen.json

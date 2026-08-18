@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.kd9nwa.email-sms-watcher</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/python3</string>
+    <string>/Users/stevens/radio-relay/email_sms_watcher.py</string>
+    <string>--interval</string>
+    <string>180</string>
+    <string>--window</string>
+    <string>1800</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/stevens/radio-relay/logs/watcher.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/stevens/radio-relay/logs/watcher.err.log</string>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>

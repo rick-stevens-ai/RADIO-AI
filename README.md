@@ -28,6 +28,8 @@ CLI + a [pi](https://github.com/earendil-works/pi) agent extension.
 | **Find live CW** (survey watering holes) | `radio cw-hunt [--copy]` | — |
 | **Speech-to-text** (SSB, whisper.cpp) | `radio speech` | `radio_decode_speech` |
 | **JS8Call messaging** (listen / send) | `radio js8 [--band]` · `js8-send` · `js8-status` | `radio_js8_listen`, `radio_js8_send`, `radio_js8_status` |
+| **Email over ham radio** (JS8 → APRS-IS → EMAIL-2) | `radio js8-email <addr> "<msg>"` | `radio_js8_email` |
+| **SMS to a phone over ham radio** (relay chain) | `radio js8-text <number> "<msg>"` | — |
 | **Autonomous FT8 QSO** (answer a CQ) | `radio ft8-call <CALL> [GRID]` | `radio_ft8_call` |
 | **Call CQ** and work the first answer | `radio ft8-cq` | `radio_ft8_cq` |
 | Generate a standards-compliant FT8 WAV | `radio ft8-encode "<msg>"` | — |

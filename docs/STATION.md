@@ -163,6 +163,29 @@ without --tx AND explicit confirmation.
 - All TX still gated: master switch + --allow-tx + band plan + fail-safe un-key,
   and now + forward-power verification.
 
+## On-air operating findings (verified 2026-08-17, real IC-7300)
+
+- **FT8 QSOs now auto-log to ADIF.** `ft8.call_cq()` / `ft8.run_qso()` write a
+  proper ADIF record (`hamradio/ft8.log_qso_adif`) to `~/radio/logs/kd9nwa.adi`
+  on completion — CALL, GRIDSQUARE, BAND, FREQ, MODE=FT8, RST_SENT/RCVD, UTC
+  date/time, STATION_CALLSIGN, MY_GRIDSQUARE. A QSO counts complete once we have
+  sent RR73 (we already received their report to reach that stage). Worked a run
+  of contacts calling CQ on 20m plus DX (CO8LY, Cuba) on 17m; all logged.
+- **RF gain reverts to 0.0** after some rig/power events — with RF gain at 0 the
+  receiver is nearly deaf (few/no FT8 decodes). Set `radio rfgain 1.0` at the
+  start of any RX session; it roughly tripled decode counts here.
+- **DATA MOD source (1A 05 00 66) must be USB(03)** for ANY codec-audio TX
+  (FT8, CW-audio, voice). It reverts on power-cycle. Reset via CI-V:
+  frame `FE FE 94 E0 1A 05 00 66 03 FD` (reply ends `fb fd` = OK). Do this with
+  the user rigctld stopped (`systemctl --user stop rigctld`) so pyserial can own
+  `/dev/ttyUSB0`, then restart it. Symptom when wrong: PTT keys, codec RUNNING,
+  but 0 W forward.
+- **CW copy of hand-sent SKCC** works well with the built-in DSP decoder
+  (`radio cw --method dsp`): locks tone + WPM (25 WPM at SNR 200+), cleaner than
+  multimon-ng. Character segmentation of hand-sent CW is imperfect but readable.
+  `radio cw-hunt` ranks the watering holes by keying quality; `--copy` parks on
+  the best clean one.
+
 ## Band scanning (verified on-air 2026-08-16)
 
 ```bash

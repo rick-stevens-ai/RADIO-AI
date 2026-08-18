@@ -142,6 +142,12 @@ def main():
     p.add_argument("--allow-tx", action="store_true")
     p.add_argument("--dry-run", action="store_true")
 
+    p = sub.add_parser("js8-text", help="send SMS to a phone via JS8->EMAIL-2->mail-watcher->Textbelt (GATED)")
+    p.add_argument("number", help="destination phone number")
+    p.add_argument("message", help="SMS text (will arrive UPPERCASE via EMAIL-2)")
+    p.add_argument("--allow-tx", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+
     p = sub.add_parser("js8-inbox", help="list JS8Call stored inbox messages")
 
     p = sub.add_parser("wspr", help="receive+decode one WSPR 2-min window")
@@ -266,6 +272,7 @@ def main():
     # starve JS8Call's CAT polling and stall its decode loop. So skip Rig() for
     # those and any other command that doesn't touch the rig directly.
     _NO_RIG = {"js8", "js8-send", "js8-status", "js8-sms", "js8-email",
+               "js8-text",
                "js8-inbox", "js8-store", "whois", "whois-rebuild",
                "whohearsme", "clock", "audio-devices",
                "wspr-encode", "wspr-spots", "tune",
@@ -387,6 +394,12 @@ def main():
             allow = args.allow_tx and txmod.tx_globally_enabled()
             out(js8mod.send_email(args.address, args.message, allow_tx=allow,
                                   dry_run=args.dry_run or not allow))
+
+        elif args.cmd == "js8-text":
+            from hamradio import js8 as js8mod
+            allow = args.allow_tx and txmod.tx_globally_enabled()
+            out(js8mod.send_text(args.number, args.message, allow_tx=allow,
+                                 dry_run=args.dry_run or not allow))
 
         elif args.cmd == "js8-inbox":
             from hamradio import js8 as js8mod

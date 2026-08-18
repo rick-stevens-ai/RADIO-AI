@@ -551,6 +551,55 @@ def send_email(address: str, message: str, *, allow_tx: bool = False,
 
 
 # ---------------------------------------------------------------------------
+# js8-text: SMS to a phone via the JS8 -> EMAIL-2 -> mail-watcher -> Textbelt
+# chain (works around the dead SMSGTE + AT&T email-to-SMS gateways).
+#
+# We transmit an EMAIL-2 message to RELAY_WATCH_ADDR whose subject the watcher on
+# cherryrd recognizes:  <ourcall>: SMS <TOKEN> <number> <message>
+# The watcher verifies the shared RELAY_TOKEN and forwards via Textbelt.
+# Config (env or ~/radio/agent/secrets.env):
+#   RELAY_WATCH_ADDR (default rick.stevens@mac.com), RELAY_TOKEN.
+# ---------------------------------------------------------------------------
+def _secret(name: str, default: str = "") -> str:
+    import os
+    v = os.environ.get(name)
+    if v:
+        return v.strip()
+    try:
+        for line in open(os.path.expanduser("~/radio/agent/secrets.env")):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, val = line.split("=", 1)
+                if k.strip() == name:
+                    return val.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return default
+
+
+def send_text(number: str, message: str, *, allow_tx: bool = False,
+              dry_run: bool = False) -> dict:
+    """Send an SMS to a phone by relaying over the radio: JS8 -> EMAIL-2 ->
+    the mail-watcher -> Textbelt. GATED like all TX.
+
+    NOTE: the EMAIL-2 gateway UPPERCASES the subject in transit, so the SMS the
+    recipient receives will be uppercase; the watcher matches the token
+    case-insensitively.
+    """
+    token = _secret("RELAY_TOKEN")
+    watch_addr = _secret("RELAY_WATCH_ADDR", "rick.stevens@mac.com")
+    if not token:
+        return {"error": "no RELAY_TOKEN in secrets.env (must match the watcher)"}
+    num = _normalize_number(number)
+    command = f"SMS {token} {num} {message}"
+    onair = format_email(watch_addr, command)
+    r = send(onair, allow_tx=allow_tx, dry_run=dry_run)
+    r.update({"kind": "text", "to": num, "message": message,
+              "via": watch_addr, "onair": onair})
+    return r
+
+
+# ---------------------------------------------------------------------------
 # Inbox / store-and-forward
 # ---------------------------------------------------------------------------
 def inbox(timeout: float = 6.0) -> dict:
