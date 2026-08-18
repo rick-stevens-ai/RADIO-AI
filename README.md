@@ -167,11 +167,29 @@ systemd/
   js8call.service    systemd --user unit (JS8Call headless under Xvfb, API :2442)
 scripts/
   setup-location-db.sh
+relay/
+  email_sms_watcher.py               Mac-side JS8->email->SMS watcher (Apple Mail store)
+  com.kd9nwa.email-sms-watcher.plist launchd service for the watcher
+skill/
+  SKILL.md           operator skill: how another model bootstraps & runs the station
+  reference/         commands.md, architecture.md, troubleshooting.md, relay-chain.md
 docs/
   STATION.md         detailed station/architecture doc
+  JS8CALL_NOTES.md   headless JS8Call TX writeup
   PLAN.md            build plan / capability roadmap
+  TODO.md            roadmap / status
 install.sh
 ```
+
+### Operator skill for AI agents
+
+[`skill/SKILL.md`](skill/SKILL.md) is a self-contained skill that lets another
+model bootstrap the station and drive every tool safely — bring-up checklist,
+the golden rules (RF gain reverts to 0, tune after QSY, one CAT owner, DATA MOD
+= USB(03), verify watts), transmit-safety gating, command recipes, and
+`skill/reference/` deep-dives (all commands, architecture, troubleshooting, and
+the SMS relay chain). Every technical claim in it was verified against the live
+IC-7300.
 
 ---
 
