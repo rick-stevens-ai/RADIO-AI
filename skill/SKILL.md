@@ -1,13 +1,6 @@
 ---
 name: kd9nwa-station
-description: >
-  Operate the KD9NWA agent-controlled ham-radio station (Intel NUC "nuc7" +
-  Icom IC-7300). Use this whenever you need to run the radio: check band
-  conditions, scan spectrum, decode/transmit FT8, decode/transmit CW/Morse,
-  run autonomous FT8 QSOs, send WSPR beacons, send JS8Call / APRS / email /
-  SMS messages over RF, look up callsign locations offline, or check who is
-  hearing the station. All transmit is real and legally gated — read the
-  TRANSMIT SAFETY section before keying.
+description: Operate the KD9NWA agent-controlled ham-radio station (Intel NUC "nuc7" + Icom IC-7300) reached over the Telario mesh (cez ssh nuc7). Use whenever you need to run the radio — check band conditions, scan spectrum, decode/transmit FT8, decode/transmit CW/Morse, run autonomous FT8 QSOs, send WSPR beacons, send JS8Call / APRS / email / SMS messages over RF, look up callsign locations offline, or check who is hearing the station. All transmit is real and legally gated; read the TRANSMIT SAFETY section before keying.
 ---
 
 # KD9NWA agent radio station — operator skill
