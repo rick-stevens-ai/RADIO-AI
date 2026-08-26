@@ -32,6 +32,40 @@ WHISPER_BIN_CANDIDATES = [
 ]
 WHISPER_MODEL_DEFAULT = WHISPER_DIR / "models" / "ggml-base.en.bin"
 
+# Multilingual models, best-first. decode_speech auto-selects the best present
+# one when language != 'en' (the .en models can't do other languages).
+WHISPER_MULTILINGUAL = [
+    WHISPER_DIR / "models" / "ggml-large-v3.bin",
+    WHISPER_DIR / "models" / "ggml-large-v2.bin",
+    WHISPER_DIR / "models" / "ggml-large.bin",
+    WHISPER_DIR / "models" / "ggml-medium.bin",
+    WHISPER_DIR / "models" / "ggml-small.bin",
+    WHISPER_DIR / "models" / "ggml-base.bin",
+    WHISPER_DIR / "models" / "ggml-tiny.bin",
+]
+
+
+def _best_multilingual_model() -> Optional[pathlib.Path]:
+    for m in WHISPER_MULTILINGUAL:
+        if m.exists() and m.stat().st_size > 1_000_000:   # skip tiny stubs
+            return m
+    return None
+
+
+def available_speech_models() -> list[dict]:
+    """List whisper models present on disk (real ones, not test stubs)."""
+    out = []
+    mdir = WHISPER_DIR / "models"
+    if mdir.is_dir():
+        for p in sorted(mdir.glob("ggml-*.bin")):
+            sz = p.stat().st_size
+            if sz < 1_000_000 or p.name.startswith("ggml-") and "for-tests" in p.name:
+                continue
+            out.append({"name": p.name, "size_mb": round(sz / 1e6),
+                        "multilingual": ".en." not in p.name,
+                        "path": str(p)})
+    return out
+
 
 # ---- CW / Morse ------------------------------------------------------------
 def detect_cw_tone(wav_path: str, lo_hz: int = 300, hi_hz: int = 1200):
@@ -248,31 +282,72 @@ def _whisper_bin() -> Optional[pathlib.Path]:
 
 
 def decode_speech(wav_path: Optional[str] = None, seconds: float = 20.0,
-                  model: Optional[str] = None) -> dict:
-    """Transcribe SSB/AM voice from a WAV (or fresh capture) via whisper.cpp.
+                  model: Optional[str] = None, language: str = "en",
+                  translate: bool = False, backend: str = "local") -> dict:
+    """Transcribe SSB/AM/shortwave voice from a WAV (or fresh capture) via
+    whisper.cpp, in ANY language.
 
-    Returns {"text": ..., "source": wav, "model": ...}.
+    language : ISO code ('en','es','pt','zh','fr','ru','ar',...) or 'auto' to
+               let whisper detect it. Anything other than 'en' forces a
+               MULTILINGUAL model (the .en models are English-only).
+    translate: if True, output English regardless of source language (whisper
+               speech-to-English translation) — handy for foreign SWBC.
+    model    : explicit model path; otherwise auto-selected for the language.
+
+    Returns {"text", "language", "translated", "source", "model", "decoder"}.
     """
+    # spark GPU backend: capture locally, transcribe on the GB10 whisper-server.
+    _burl = _pick_spark_backend()  # ordered fallback across live sparks
+    _use_spark = (backend == "spark") or (backend == "auto" and _spark_reachable(_burl))
+    if _use_spark:
+        if wav_path is None:
+            wav_path = audio.record_wav(seconds)
+        return _decode_speech_spark(wav_path, _burl, language=language, translate=translate)
     wbin = _whisper_bin()
     if not wbin:
         raise RuntimeError(
             "whisper.cpp not built yet (looked in ~/radio/whisper.cpp/build/bin)")
-    model_path = pathlib.Path(model) if model else WHISPER_MODEL_DEFAULT
+
+    lang = (language or "en").lower()
+    need_multi = translate or lang not in ("en",)
+
+    if model:
+        model_path = pathlib.Path(model)
+    elif need_multi:
+        model_path = _best_multilingual_model()
+        if not model_path:
+            raise RuntimeError(
+                "no multilingual whisper model found for language=%r/translate. "
+                "Download one, e.g.: bash ~/radio/whisper.cpp/models/"
+                "download-ggml-model.sh medium  (or small/large-v3)." % lang)
+    else:
+        model_path = WHISPER_MODEL_DEFAULT
     if not model_path.exists():
         raise RuntimeError(f"whisper model not found: {model_path}")
 
     if wav_path is None:
         wav_path = audio.record_wav(seconds)
 
-    # whisper.cpp wants 16 kHz mono WAV (our capture already is, but re-norm to
-    # be safe against odd sample rates from ALSA fallbacks)
+    # whisper.cpp wants 16 kHz mono WAV; re-norm defensively.
     norm = tempfile.mktemp(suffix=".wav")
     try:
         subprocess.run(["sox", wav_path, "-r", "16000", "-c", "1", norm],
                        check=True, stderr=subprocess.DEVNULL)
-        out = subprocess.check_output(
-            [str(wbin), "-m", str(model_path), "-f", norm, "-nt", "-l", "en"],
-            text=True, stderr=subprocess.DEVNULL)
+        cmd = [str(wbin), "-m", str(model_path), "-f", norm, "-nt",
+               "-l", lang]
+        if translate:
+            cmd.append("-tr")
+        # capture stderr too, so we can read whisper's auto-detected language
+        proc = subprocess.run(cmd, text=True, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE)
+        out = proc.stdout
+        detected = None
+        if lang == "auto":
+            import re as _re
+            m = _re.search(r"auto-detected language:\s*([a-z]{2})",
+                           proc.stderr or "")
+            if m:
+                detected = m.group(1)
     finally:
         try:
             os.unlink(norm)
@@ -281,4 +356,80 @@ def decode_speech(wav_path: Optional[str] = None, seconds: float = 20.0,
 
     text = " ".join(l.strip() for l in out.splitlines() if l.strip())
     return {"decoder": f"whisper.cpp/{model_path.name}", "text": text,
+            "language": detected or lang, "requested_language": lang,
+            "detected_language": detected, "translated": translate,
             "source": wav_path, "model": str(model_path)}
+
+
+# --- SPARK-BACKEND-PATCH ---
+def _spark_reachable(base_url: str, timeout: float = 3.0) -> bool:
+    """Quick liveness check for the spark whisper-server."""
+    try:
+        import urllib.request
+        urllib.request.urlopen(base_url.rstrip("/") + "/", timeout=timeout).read(1)
+        return True
+    except Exception:
+        return False
+
+
+def _decode_speech_spark(wav_path: str, base_url: str, language: str = "en",
+                         translate: bool = False) -> dict:
+    """POST a WAV to the spark whisper-server /inference and normalize the result
+    into the same dict shape decode_speech returns for the local path."""
+    import json as _json
+    # normalize to 16k mono defensively (server has --convert but be safe)
+    norm = tempfile.mktemp(suffix=".wav")
+    payload = wav_path
+    try:
+        subprocess.run(["sox", wav_path, "-r", "16000", "-c", "1", norm],
+                       check=True, stderr=subprocess.DEVNULL)
+        payload = norm
+    except Exception:
+        payload = wav_path
+    url = base_url.rstrip("/") + "/inference"
+    lang = (language or "en").lower()
+    # build multipart with curl (already present, robust) rather than hand-rolling
+    cmd = ["curl", "-s", "-m", "90", url,
+           "-F", f"file=@{payload}",
+           "-F", "response_format=json",
+           "-F", f"language={lang}"]
+    if translate:
+        cmd += ["-F", "translate=true"]
+    try:
+        raw = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+        data = _json.loads(raw) if raw.strip() else {}
+        text = (data.get("text") or "").strip()
+    except Exception as e:
+        raise RuntimeError(f"spark whisper-server error at {url}: {e}")
+    finally:
+        try:
+            os.unlink(norm)
+        except OSError:
+            pass
+    return {"decoder": f"spark-gpu-whisper ({base_url})", "text": text,
+            "language": lang, "requested_language": lang,
+            "detected_language": None, "translated": translate,
+            "source": wav_path, "model": "spark:ggml-medium", "backend": "spark"}
+
+
+def _pick_spark_backend():
+    """First reachable whisper-server URL. Order: env override(s), then fleet
+    sparks (9611 primary/live, 95fe spare). Falls back to first entry if none
+    answer so the caller gets a clear connection error, not silence."""
+    import os as _os
+    cand = []
+    ev = _os.environ.get("RADIO_WHISPER_URL")
+    if ev:
+        cand.append(ev.rstrip("/"))
+    evs = _os.environ.get("RADIO_WHISPER_URLS")
+    if evs:
+        cand += [u.strip().rstrip("/") for u in evs.split(",") if u.strip()]
+    cand += ["http://100.66.20.27:8181", "http://100.90.211.89:8181"]
+    seen = set(); ordered = []
+    for u in cand:
+        if u not in seen:
+            seen.add(u); ordered.append(u)
+    for u in ordered:
+        if _spark_reachable(u):
+            return u
+    return ordered[0]

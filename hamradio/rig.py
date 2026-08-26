@@ -185,7 +185,18 @@ class Rig:
 
     def set_mode(self, mode: str, passband: int = 0) -> None:
         mode = mode.upper()
-        self._cmd(f"set_mode {mode} {int(passband)}")
+        # IC-7300 rejects "set_mode <MODE> 0" with rigctld error -9. A passband of
+        # 0 means "caller didn't specify" -> let Hamlib use the rig's normal/default
+        # passband for the mode by passing an explicit sensible width. Data modes
+        # (PKTUSB/PKTLSB/RTTY) use ~3000 Hz; voice/CW fall back to Hamlib default
+        # via passband -1 which the backend maps to the mode's normal width.
+        if passband and passband > 0:
+            self._cmd(f"set_mode {mode} {int(passband)}")
+        elif mode in ("PKTUSB", "PKTLSB", "USB", "LSB", "RTTY", "RTTYR"):
+            self._cmd(f"set_mode {mode} 3000")
+        else:
+            # -1 = keep/normal passband for the mode (Hamlib convention)
+            self._cmd(f"set_mode {mode} -1")
 
 
 @dataclass

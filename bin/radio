@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/stevens/radio/venv/bin/python3
 """
 radio — command-line control of the KD9NWA IC-7300 station (agent-friendly).
 
@@ -41,9 +41,9 @@ from hamradio import ft8 as ft8mod                      # noqa: E402
 from hamradio import pskreporter as pskmod              # noqa: E402
 from hamradio import location as locmod                 # noqa: E402
 
-# Station identity (KD9NWA, grid EN51). Override with env if needed.
+# Station identity (KD9NWA, grid EN51TP = 4098 Cherry Rd, Oswego IL). Override with env if needed.
 MY_CALL = os.environ.get("MY_CALL", "KD9NWA")
-MY_GRID = os.environ.get("MY_GRID", "EN51")
+MY_GRID = os.environ.get("MY_GRID", "EN51TP")  # 4098 Cherry Rd, Oswego IL (41.6274,-88.3377)
 
 
 def out(obj):
@@ -106,6 +106,27 @@ def main():
     p.add_argument("--wav", help="decode an existing WAV instead of capturing")
     p.add_argument("--method", choices=["dsp", "multimon", "both"], default="dsp",
                    help="dsp=built-in DSP decoder (default), multimon=legacy, both=compare")
+
+    p = sub.add_parser("psk", help="decode BPSK31/63/125 (PSK31 chat) from RX audio")
+    p.add_argument("--seconds", type=float, default=20.0)
+    p.add_argument("--wav", help="decode an existing WAV instead of capturing")
+    p.add_argument("--mode", choices=["BPSK31", "BPSK63", "BPSK125"],
+                   default="BPSK31")
+    p.add_argument("--carrier", type=float, default=0.0,
+                   help="carrier Hz (0=auto-find via squared-signal FFT)")
+    p.add_argument("--windows", action="store_true",
+                   help="decode in overlapping windows (fading signals)")
+
+    p = sub.add_parser("rtty", help="decode RTTY (async FSK) from RX audio or a WAV")
+    p.add_argument("--seconds", type=float, default=20.0,
+                   help="capture length if not decoding an existing WAV")
+    p.add_argument("--wav", help="decode an existing WAV instead of capturing")
+    p.add_argument("--baud", type=float, default=45.45,
+                   help="baud rate (default 45.45; use --auto to scan)")
+    p.add_argument("--auto", action="store_true", help="auto-detect baud + parity")
+    p.add_argument("--parity", default="auto", choices=["auto", "odd", "even"])
+    p.add_argument("--mark", type=float, default=0.0, help="mark tone Hz (0=auto)")
+    p.add_argument("--space", type=float, default=0.0, help="space tone Hz (0=auto)")
 
     p = sub.add_parser("cw-monitor", help="copy CW over several cycles and VOTE (weak-sig)")
     p.add_argument("--cycles", type=int, default=3)
@@ -208,10 +229,77 @@ def main():
     p.add_argument("--locate", action="store_true",
                    help="annotate each decode with the caller's location")
 
-    p = sub.add_parser("speech", help="speech-to-text from RX audio (SSB voice)")
+    p = sub.add_parser("speech", help="speech-to-text from RX audio (SSB/AM/SW voice, any language)")
     p.add_argument("--seconds", type=float, default=20.0)
     p.add_argument("--wav", help="decode an existing WAV instead of capturing")
     p.add_argument("--model", help="path to a whisper ggml model")
+    p.add_argument("--language", "-l", default="en",
+                   help="ISO code (en/es/pt/zh/fr/ru/ar...) or 'auto' to detect")
+    p.add_argument("--translate", action="store_true",
+                   help="whisper's built-in ->English translation")
+    p.add_argument("--to", help="translate the transcript into this language "
+                   "(es/fr/pt/ru/zh/ar/en) via offline MT after decoding")
+    # SPARK-BACKEND-CLI
+    p.add_argument("--backend", choices=["local", "spark", "auto"],
+                   default="local",
+                   help="local whisper.cpp (default), spark GPU server, "
+                        "or auto (spark if reachable)")
+
+    p = sub.add_parser("speech-models", help="list installed whisper speech models")
+
+    p = sub.add_parser("translate", help="offline text translation (Argos MT)")
+    p.add_argument("text")
+    p.add_argument("--to", default="en", help="target language (default en)")
+    p.add_argument("--from", dest="frm", default="auto",
+                   help="source language or 'auto' (default auto)")
+
+    p = sub.add_parser("translate-info", help="show installed MT languages/pairs")
+
+    p = sub.add_parser("swbc", help="HF/shortwave broadcast index: now on air (UTC)")
+    p.add_argument("--lang", help="filter by language substring (e.g. Spanish)")
+    p.add_argument("--target", help="filter by target zone (e.g. N.America)")
+    p.add_argument("--all", action="store_true", help="show full schedule, not just now")
+    p.add_argument("--station", help="filter by station name")
+    p.add_argument("--band", help="filter by SW meter band (e.g. 31m)")
+
+    p = sub.add_parser("swbc-freq", help="what broadcast is on/near a frequency")
+    p.add_argument("hz", type=int)
+    p.add_argument("--tol", type=int, default=5000, help="tolerance Hz")
+
+    p = sub.add_parser("swbc-bands", help="HF broadcast band plan + day/night hints")
+
+    # --- BROADCAST-DB-CMDS ---
+    p = sub.add_parser("now", help="what regular broadcasts SHOULD be on air now (EiBi schedule DB, UTC)")
+    p.add_argument("--lang", help="filter by language substring (english/spanish/russian...)")
+    p.add_argument("--band", help="filter by band (49m/31m/25m/19m...)")
+    p.add_argument("--all", action="store_true", help="all targets, not just North America")
+    p.add_argument("--nonvoice", action="store_true", help="include digital/CW/data entries")
+
+    p = sub.add_parser("guide", help="who is scheduled on a given channel (EiBi DB)")
+    p.add_argument("freq", type=float, help="frequency in kHz (e.g. 9350)")
+    p.add_argument("--window", type=float, default=5.0, help="+/- kHz window")
+
+    p = sub.add_parser("find-lang", help="find channels carrying a language (schedule DB)")
+    p.add_argument("lang", help="language name (english/spanish/french/russian/chinese...)")
+    p.add_argument("--all", action="store_true", help="all targets, not just North America")
+    p.add_argument("--anytime", action="store_true", help="not just on-air-now")
+
+    # --- SCAN-LANGS-CMD ---
+    p = sub.add_parser("scan-langs",
+        help="rapid multi-channel language scan: prop-prioritized survey -> per-carrier "
+             "S-meter+SNR -> spark-GPU language detect -> schedule cross-ref")
+    p.add_argument("--bands", help="comma list (49m,31m,25m...); default = propagation-open bands")
+    p.add_argument("--dwell", type=float, default=5.0, help="capture seconds per channel")
+    p.add_argument("--min-db", type=float, help="skip carriers weaker than this survey dB")
+    p.add_argument("--limit", type=int, help="max carriers to sample")
+    p.add_argument("--no-prio", action="store_true", help="disable propagation prioritization")
+    p.add_argument("--top-bands", type=int, help="only scan the N most-open bands")
+    p.add_argument("--min-openness", type=int, default=25,
+                   help="skip bands below this propagation openness (0-100)")
+
+    p = sub.add_parser("swbc-survey", help="scan a SW broadcast band and label carriers")
+    p.add_argument("band", help="meter band, e.g. 31m, 19m, 49m")
+    p.add_argument("--step", type=int, default=5000)
 
     p = sub.add_parser("tx-enable", help="arm TX master switch (licensed op only)")
     p.add_argument("reason", nargs="?", default="")
@@ -225,6 +313,40 @@ def main():
     p.add_argument("--allow-tx", action="store_true", help="required to actually key")
     p.add_argument("--timeout", type=int, default=0, help="max key-down s (0=auto)")
     p.add_argument("--dry-run", action="store_true", help="simulate, do not key")
+
+    p = sub.add_parser("send-psk", help="GENERATE + transmit BPSK31/63/125 text (gated)")
+    p.add_argument("text")
+    p.add_argument("--mode", choices=["BPSK31", "BPSK63", "BPSK125"],
+                   default="BPSK31")
+    p.add_argument("--tone", type=int, default=1000, help="audio carrier Hz")
+    p.add_argument("--allow-tx", action="store_true", help="required to actually key")
+    p.add_argument("--timeout", type=int, default=0, help="max key-down s (0=auto)")
+    p.add_argument("--dry-run", action="store_true", help="simulate, do not key")
+
+    p = sub.add_parser("psk-encode", help="render a PSK message to a WAV (no TX)")
+    p.add_argument("text")
+    p.add_argument("--mode", choices=["BPSK31", "BPSK63", "BPSK125"],
+                   default="BPSK31")
+    p.add_argument("--tone", type=int, default=1000, help="audio carrier Hz")
+    p.add_argument("--out", required=True, help="output WAV path")
+
+    p = sub.add_parser("send-rtty", help="GENERATE + transmit RTTY (gated)")
+    p.add_argument("text")
+    p.add_argument("--baud", type=float, default=45.45)
+    p.add_argument("--mark", type=float, default=1700.0, help="mark tone Hz")
+    p.add_argument("--space", type=float, default=1530.0, help="space tone Hz")
+    p.add_argument("--parity", default="odd", choices=["odd", "even"])
+    p.add_argument("--allow-tx", action="store_true", help="required to actually key")
+    p.add_argument("--timeout", type=int, default=0, help="max key-down s (0=auto)")
+    p.add_argument("--dry-run", action="store_true", help="simulate, do not key")
+
+    p = sub.add_parser("rtty-encode", help="render an RTTY message to a WAV (no TX)")
+    p.add_argument("text")
+    p.add_argument("--baud", type=float, default=45.45)
+    p.add_argument("--mark", type=float, default=1700.0)
+    p.add_argument("--space", type=float, default=1530.0)
+    p.add_argument("--parity", default="odd", choices=["odd", "even"])
+    p.add_argument("--out", required=True, help="output WAV path")
 
     p = sub.add_parser("send-speech", help="GENERATE + transmit voice via TTS (gated)")
     p.add_argument("text")
@@ -275,8 +397,11 @@ def main():
                "js8-text",
                "js8-inbox", "js8-store", "whois", "whois-rebuild",
                "whohearsme", "clock", "audio-devices",
-               "wspr-encode", "wspr-spots", "tune",
-               "text", "text-quota", "relay"}
+               "wspr-encode", "wspr-spots", "tune", "psk-encode", "rtty-encode",
+               "swbc", "swbc-freq", "swbc-bands", "speech-models",
+               "translate", "translate-info",
+               "text", "text-quota", "relay",
+               "now", "guide", "find-lang"}
     rig = None if args.cmd in _NO_RIG else Rig()
 
     try:
@@ -344,6 +469,26 @@ def main():
         elif args.cmd == "cw":
             out(decodemod.decode_cw(wav_path=args.wav, seconds=args.seconds,
                                     method=args.method))
+
+        elif args.cmd == "psk":
+            from hamradio import psk as _psk
+            wav = args.wav or audiomod.record_wav(args.seconds)
+            carrier = args.carrier or None
+            if args.windows:
+                out({"decoder": "hamradio.psk", "mode": args.mode,
+                     "windows": _psk.decode_windows(wav, mode=args.mode,
+                                                    fc=carrier)})
+            else:
+                out(_psk.decode(wav, mode=args.mode, fc=carrier))
+
+        elif args.cmd == "rtty":
+            from hamradio import rtty as _rtty
+            wav = args.wav or audiomod.record_wav(args.seconds)
+            out(_rtty.decode(wav,
+                             baud=args.baud,
+                             mark_hz=(args.mark or None),
+                             space_hz=(args.space or None),
+                             parity=("auto" if args.auto else args.parity)))
 
         elif args.cmd == "cw-monitor":
             from hamradio import cwdecode as _cw
@@ -510,8 +655,86 @@ def main():
                          "cq_calls": allcq})
 
         elif args.cmd == "speech":
-            out(decodemod.decode_speech(wav_path=args.wav, seconds=args.seconds,
-                                        model=args.model))
+            res = decodemod.decode_speech(
+                wav_path=args.wav, seconds=args.seconds, model=args.model,
+                language=args.language, translate=args.translate,
+                backend=getattr(args, "backend", "local"))
+            if getattr(args, "to", None) and res.get("text"):
+                from hamradio import translate as _T
+                src = res.get("language", "auto")
+                if src in ("auto", "", None):
+                    src = "auto"
+                tr = _T.translate(res["text"], to=args.to, frm=src)
+                res["translation"] = tr.get("translated")
+                res["translated_to"] = args.to
+                res["translate_path"] = tr.get("path")
+                if tr.get("error"):
+                    res["translate_error"] = tr["error"]
+            out(res)
+
+        elif args.cmd == "speech-models":
+            out({"models": decodemod.available_speech_models()})
+
+        elif args.cmd == "now":
+            from hamradio import schedule as _sch
+            label, rows = _sch.now(nam_only=not args.all, lang=args.lang,
+                                   band=args.band, include_nonvoice=args.nonvoice)
+            out({"utc_now": label, "count": len(rows),
+                 "region": "all" if args.all else "North America", "broadcasts": rows})
+
+        elif args.cmd == "guide":
+            from hamradio import schedule as _sch
+            out({"freq_khz": args.freq, "scheduled": _sch.guide(args.freq, args.window)})
+
+        elif args.cmd == "find-lang":
+            from hamradio import schedule as _sch
+            label, rows = _sch.find(args.lang, nam_only=not args.all,
+                                    now_only=not args.anytime)
+            out({"language": args.lang, "utc_now": label, "count": len(rows),
+                 "region": "all" if args.all else "North America", "channels": rows})
+
+        elif args.cmd == "scan-langs":
+            from hamradio import scanlang as _sl
+            bands = args.bands.split(",") if args.bands else None
+            res = _sl.scan(bands=bands, dwell=args.dwell, min_db=args.min_db,
+                           limit=args.limit, prioritize=not args.no_prio,
+                           min_openness=args.min_openness, top_bands=args.top_bands)
+            out(res)
+
+        elif args.cmd == "translate":
+            from hamradio import translate as _T
+            out(_T.translate(args.text, to=args.to, frm=args.frm))
+
+        elif args.cmd == "translate-info":
+            from hamradio import translate as _T
+            out(_T.available())
+
+        elif args.cmd == "swbc":
+            from hamradio import swbc as _sw
+            if args.all or args.station or args.band:
+                out(_sw.find(lang=args.lang, station=args.station,
+                             target=args.target, band=args.band))
+            else:
+                out(_sw.now_on_air(lang=args.lang, target=args.target))
+
+        elif args.cmd == "swbc-freq":
+            from hamradio import swbc as _sw
+            out(_sw.whats_on(args.hz, tol_hz=args.tol))
+
+        elif args.cmd == "swbc-bands":
+            from hamradio import swbc as _sw
+            out({"rx_max_hz": _sw.RX_MAX_HZ, "bands": _sw.receivable_bands(),
+                 "time_stations": [{"station": c, "freq_khz": f // 1000,
+                                    "site": s, "note": n}
+                                   for (c, f, s, n) in _sw.TIME_STATIONS]})
+
+        elif args.cmd == "swbc-survey":
+            from hamradio import swbc as _sw
+            res = _sw.survey(
+                lambda lo, hi: scanmod.scan(rig, lo, hi, step_hz=args.step,
+                                            mode="AM"),
+                args.band)
+            out(res)
 
         elif args.cmd == "audio-devices":
             out(audiomod.list_audio_devices())
@@ -561,6 +784,37 @@ def main():
             out(genmod.send_cw(rig, args.text, wpm=args.wpm, method=args.method,
                                tone_hz=args.tone, allow_tx=args.allow_tx,
                                timeout=(args.timeout or None), dry_run=args.dry_run))
+
+        elif args.cmd == "send-psk":
+            out(genmod.send_psk(rig, args.text, mode=args.mode,
+                                tone_hz=args.tone, allow_tx=args.allow_tx,
+                                timeout=(args.timeout or None),
+                                dry_run=args.dry_run))
+
+        elif args.cmd == "psk-encode":
+            from hamradio import psk as _psk
+            pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+            wav = _psk.encode_wav(args.text, mode=args.mode,
+                                  tone_hz=float(args.tone), out_path=args.out)
+            out({"wav": wav, "text": args.text, "mode": args.mode,
+                 "tone_hz": args.tone})
+
+        elif args.cmd == "send-rtty":
+            out(genmod.send_rtty(rig, args.text, baud=args.baud,
+                                 mark_hz=args.mark, space_hz=args.space,
+                                 parity=args.parity, allow_tx=args.allow_tx,
+                                 timeout=(args.timeout or None),
+                                 dry_run=args.dry_run))
+
+        elif args.cmd == "rtty-encode":
+            from hamradio import rtty as _rtty
+            pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+            wav = _rtty.encode_wav(args.text, baud=args.baud,
+                                   mark_hz=args.mark, space_hz=args.space,
+                                   parity=args.parity, out_path=args.out)
+            out({"wav": wav, "text": args.text, "baud": args.baud,
+                 "mark_hz": args.mark, "space_hz": args.space,
+                 "parity": args.parity})
 
         elif args.cmd == "send-speech":
             out(genmod.send_speech(rig, args.text, voice=args.voice,

@@ -256,6 +256,99 @@ def cw_to_wav(text: str, wpm: int = 20, tone_hz: int = 700, rate: int = 22050,
 
 
 # ===========================================================================
+# PSK GENERATION (BPSK31/63/125 -> transmit)
+# ===========================================================================
+def send_psk(rig: Rig, text: str, *, mode: str = "BPSK31",
+             tone_hz: int = 1000, allow_tx: bool = False,
+             timeout: Optional[int] = None, dry_run: bool = False) -> dict:
+    """Transmit `text` as BPSK (PSK31 family) through the USB codec.
+
+    Renders the message to a PSK audio WAV (hamradio.psk.encode_wav), then keys
+    PTT via the tx gate, forces a data mode (PKTUSB) so codec audio reaches the
+    transmitter, plays the WAV, and always un-keys. Verifies forward power.
+    """
+    from . import psk as pskmod
+    text = text.rstrip("\n")
+    if not text.strip():
+        return {"error": "empty text"}
+    wav = pskmod.encode_wav(text, mode=mode, tone_hz=float(tone_hz))
+    dur = audiomod.wav_duration(wav)
+    to = int(timeout if timeout else min(txmod.TX_HARD_CEILING, max(15, int(dur) + 5)))
+    orig_mode = orig_pb = None
+    changed = False
+    try:
+        if not dry_run:
+            orig_mode, orig_pb, changed = _ensure_data_mode(rig)
+        with txmod.keyed(rig, allow_tx=allow_tx, timeout=to, dry_run=dry_run) as k:
+            if k.get("dry_run"):
+                return {"dry_run": True, "method": "psk", "mode": mode.upper(),
+                        "text": text, "tone_hz": tone_hz, "wav": wav,
+                        "tx_mode": "PKTUSB", "duration_s": round(dur, 1)}
+            max_fwd = _play_and_measure(rig, wav)
+        return {"method": "psk", "mode": mode.upper(), "text": text,
+                "tone_hz": tone_hz, "freq_hz": k.get("freq_hz"),
+                "tx_mode": rig.get_mode()[0], "duration_s": round(dur, 1),
+                "fwd_power": max_fwd, "sent": max_fwd > 0.01,
+                **({} if max_fwd > 0.01 else
+                   {"warning": "no forward power detected; check data mode + "
+                               "IC-7300 DATA MOD source=USB and audio gain"})}
+    finally:
+        if changed and orig_mode:
+            rig.set_mode(orig_mode, orig_pb)
+        try:
+            os.unlink(wav)
+        except OSError:
+            pass
+
+
+def send_rtty(rig: Rig, text: str, *, baud: float = 45.45,
+              mark_hz: float = 1700.0, space_hz: float = 1530.0,
+              parity: str = "odd", allow_tx: bool = False,
+              timeout: Optional[int] = None, dry_run: bool = False) -> dict:
+    """Transmit `text` as RTTY (async FSK, Baudot) through the USB codec.
+
+    Renders the message to an AFSK WAV (hamradio.rtty.encode_wav), then keys PTT
+    via the tx gate, forces a data mode (PKTUSB) so codec audio reaches the
+    transmitter, plays the WAV, and always un-keys. Verifies forward power.
+    """
+    from . import rtty as rtty_mod
+    text = text.rstrip("\n")
+    if not text.strip():
+        return {"error": "empty text"}
+    wav = rtty_mod.encode_wav(text, baud=baud, mark_hz=mark_hz,
+                              space_hz=space_hz, parity=parity)
+    dur = audiomod.wav_duration(wav)
+    to = int(timeout if timeout else min(txmod.TX_HARD_CEILING, max(15, int(dur) + 5)))
+    orig_mode = orig_pb = None
+    changed = False
+    try:
+        if not dry_run:
+            orig_mode, orig_pb, changed = _ensure_data_mode(rig)
+        with txmod.keyed(rig, allow_tx=allow_tx, timeout=to, dry_run=dry_run) as k:
+            if k.get("dry_run"):
+                return {"dry_run": True, "method": "rtty", "baud": baud,
+                        "parity": parity, "mark_hz": mark_hz, "space_hz": space_hz,
+                        "text": text, "wav": wav, "tx_mode": "PKTUSB",
+                        "duration_s": round(dur, 1)}
+            max_fwd = _play_and_measure(rig, wav)
+        return {"method": "rtty", "baud": baud, "parity": parity,
+                "mark_hz": mark_hz, "space_hz": space_hz, "text": text,
+                "freq_hz": k.get("freq_hz"), "tx_mode": rig.get_mode()[0],
+                "duration_s": round(dur, 1), "fwd_power": max_fwd,
+                "sent": max_fwd > 0.01,
+                **({} if max_fwd > 0.01 else
+                   {"warning": "no forward power detected; check data mode + "
+                               "IC-7300 DATA MOD source=USB and audio gain"})}
+    finally:
+        if changed and orig_mode:
+            rig.set_mode(orig_mode, orig_pb)
+        try:
+            os.unlink(wav)
+        except OSError:
+            pass
+
+
+# ===========================================================================
 # SPEECH GENERATION (TTS -> transmit)
 # ===========================================================================
 def tts_to_wav(text: str, voice: Optional[str] = None,
