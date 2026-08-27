@@ -68,6 +68,7 @@ class QSOLog:
     band_hz: int = 0
     started: str = ""
     completed: bool = False
+    confirmed: bool = False   # True if we heard their R-report / final 73
     transcript: list = field(default_factory=list)
 
     def to_dict(self):
@@ -121,6 +122,8 @@ def log_qso_adif(log: "QSOLog", *, path: str = ADIF_LOG) -> str:
         parts.append(_adif_field("RST_SENT", log.rst_sent))
     if log.rst_rcvd:
         parts.append(_adif_field("RST_RCVD", log.rst_rcvd))
+    if not getattr(log, "confirmed", True):
+        parts.append(_adif_field("COMMENT", "report exchanged; final 73 not copied"))
     parts += [
         _adif_field("QSO_DATE", date),
         _adif_field("TIME_ON", tm),
@@ -326,12 +329,15 @@ def answer_cq(rig: Rig, dxcall: str, dxgrid: str, my_call: str, my_grid: str,
         if stage == "done":
             break
 
-    log.completed = stage in ("signoff", "done")
+    # Log if we got at least their signal report (roger) — the contact is real
+    # even if their final 73 faded. signoff/done = fully confirmed.
+    log.completed = stage in ("roger", "signoff", "done") and bool(log.dx_call)
+    log.confirmed = stage in ("signoff", "done")
     if log.completed and not dry_run:
         try:
             log_qso_adif(log)
-        except Exception:
-            pass
+        except Exception as e:
+            emit({"log_error": repr(e)})
     return log.to_dict()
 
 
@@ -410,11 +416,15 @@ def call_cq(rig: Rig, my_call: str, my_grid: str, *,
         if stage == "done":
             break
 
-    # A QSO where we sent RR73 counts as complete on our side.
-    log.completed = stage in ("rr73", "done") and bool(log.dx_call)
+    # Log any QSO where a station answered our CQ and we exchanged a signal
+    # report. Full 73 confirmation (rr73/done) is ideal, but on marginal/DX
+    # paths their final R-report or 73 often fades — the contact still happened
+    # (they called us, we sent a report). Record those too, flagged unconfirmed.
+    log.completed = stage in ("report", "rr73", "done") and bool(log.dx_call)
+    log.confirmed = stage in ("rr73", "done")  # heard their R-report / 73
     if log.completed and not dry_run:
         try:
             log_qso_adif(log)
-        except Exception:
-            pass
+        except Exception as e:
+            emit({"log_error": repr(e)})
     return log.to_dict()
