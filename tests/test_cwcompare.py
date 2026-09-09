@@ -30,7 +30,9 @@ CQ CQ DE KD9NWA K
     assert extract_ggmorse_text(raw) == "CQ CQ DE KD9NWA K"
 
 
-def test_consensus_confirms_repeated_callsign_across_independent_engines():
+def test_consensus_confirms_repeated_callsign_across_independent_engines(monkeypatch):
+    from hamradio import cwcompare
+    monkeypatch.setattr(cwcompare, "_authoritatively_assigned", lambda call: call in {"AC6ZM", "WA8ZBT"})
     rows = [
         EngineResult("deepcw", "ED WA8ZBT TU 5NN TX WA8ZBT TU AC6ZM", 0, 1.0),
         EngineResult("cwformer", "D WA8ZBT TU 5NN X WA8ZBT U AC6ZM", 0, 2.0),
@@ -139,7 +141,19 @@ def test_consensus_rejects_correlated_unallocated_garbage():
         EngineResult("a", "CQ DE H3LLO TEST1A CQ1TEST", 0, 0.1),
         EngineResult("b", "H3LLO TEST1A CQ1TEST", 0, 0.1),
     ]
-    assert consensus(rows)["verdict"] == "uncertain"
+    got = consensus(rows)
+    assert got["verdict"] == "uncertain"
+    assert got["agreed_callsigns"] == []
+
+
+def test_consensus_rejects_prefix_valid_but_unassigned_suffixes():
+    rows = [
+        EngineResult("a", "K1ABCDE W9ZZZZZ N0QQQQQ G4ZZZZZ JA1ZZZZZ", 0, 0.1),
+        EngineResult("b", "K1ABCDE W9ZZZZZ N0QQQQQ G4ZZZZZ JA1ZZZZZ", 0, 0.1),
+    ]
+    got = consensus(rows)
+    assert got["verdict"] == "uncertain"
+    assert got["agreed_callsigns"] == []
 
 
 def test_compare_many_rejects_empty_input():

@@ -107,20 +107,39 @@ def _callsigns(text: str) -> set[str]:
     return {token for token in normalize_text(text).split() if _is_callsign(token)}
 
 
+def _authoritatively_assigned(call: str) -> bool:
+    """True only when the complete call exists in an authoritative local set.
+
+    DXCC prefix matches are deliberately insufficient: they identify a country,
+    not whether the complete callsign was ever assigned.
+    """
+    base = call.partition("/")[0]
+    try:
+        from . import location
+        lookup = location.lookup(base)
+    except Exception:
+        return False
+    return "fcc" in lookup.get("sources", ())
+
+
 def consensus(results: Iterable[EngineResult]) -> dict:
     rows = [r for r in results if r.returncode == 0 and normalize_text(r.text)]
     call_support: dict[str, set[str]] = {}
     for row in rows:
         for call in _callsigns(row.text):
             call_support.setdefault(call, set()).add(row.engine)
-    agreed = sorted(call for call, engines in call_support.items() if len(engines) >= 2)
-    support = max((len(v) for v in call_support.values()), default=0)
+    agreed = sorted(call for call, engines in call_support.items()
+                    if len(engines) >= 2 and _authoritatively_assigned(call))
+    support = max((len(call_support[call]) for call in agreed), default=0)
+    candidates = sorted(call for call, engines in call_support.items()
+                        if len(engines) >= 2 and call not in agreed)
     return {
         "verdict": "agreement" if agreed else "uncertain",
         "agreed_callsigns": agreed,
+        "unverified_candidates": candidates,
         "support": support,
         "call_support": {k: sorted(v) for k, v in sorted(call_support.items())},
-        "rule": "agreement requires the same callsign from at least two independent engines",
+        "rule": "agreement requires two engines plus authoritative full-callsign evidence",
     }
 
 
