@@ -107,6 +107,18 @@ def main():
     p.add_argument("--method", choices=["dsp", "multimon", "both"], default="dsp",
                    help="dsp=built-in DSP decoder (default), multimon=legacy, both=compare")
 
+    p = sub.add_parser("cw-compare", help="run multiple CW decoders with conservative consensus")
+    src = p.add_mutually_exclusive_group()
+    src.add_argument("--wav", help="decode one existing WAV")
+    src.add_argument("--dir", help="decode all WAV files in a directory")
+    p.add_argument("--seconds", type=float, default=20.0,
+                   help="capture length when --wav/--dir is omitted")
+    p.add_argument("--engines", default="dsp,deepcw,cwformer,ggmorse,morseangel",
+                   help="comma-separated decoder names")
+    p.add_argument("--timeout", type=float, default=90.0,
+                   help="per-engine timeout in seconds")
+    p.add_argument("--output", help="also save complete JSON result here")
+
     p = sub.add_parser("psk", help="decode BPSK31/63/125 (PSK31 chat) from RX audio")
     p.add_argument("--seconds", type=float, default=20.0)
     p.add_argument("--wav", help="decode an existing WAV instead of capturing")
@@ -469,6 +481,21 @@ def main():
         elif args.cmd == "cw":
             out(decodemod.decode_cw(wav_path=args.wav, seconds=args.seconds,
                                     method=args.method))
+
+        elif args.cmd == "cw-compare":
+            from hamradio import cwcompare as _cmp
+            engines = tuple(x.strip() for x in args.engines.split(",") if x.strip())
+            if args.dir:
+                wavs = sorted(pathlib.Path(args.dir).glob("*.wav"))
+                res = _cmp.compare_many(wavs, engines, timeout=args.timeout)
+            else:
+                wav = args.wav or audiomod.record_wav(args.seconds)
+                res = _cmp.compare_wav(wav, engines, timeout=args.timeout)
+            if args.output:
+                pathlib.Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+                pathlib.Path(args.output).write_text(json.dumps(res, indent=2) + "\n")
+                res["_json_out"] = args.output
+            out(res)
 
         elif args.cmd == "psk":
             from hamradio import psk as _psk
