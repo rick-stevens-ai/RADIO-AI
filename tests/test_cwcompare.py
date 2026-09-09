@@ -132,3 +132,36 @@ def test_is_callsign_rejects_digit_leading_signal_report():
 
     assert not _is_callsign("5NN")
     assert _is_callsign("5Z4VJ")
+
+
+def test_consensus_rejects_correlated_unallocated_garbage():
+    rows = [
+        EngineResult("a", "CQ DE H3LLO TEST1A CQ1TEST", 0, 0.1),
+        EngineResult("b", "H3LLO TEST1A CQ1TEST", 0, 0.1),
+    ]
+    assert consensus(rows)["verdict"] == "uncertain"
+
+
+def test_compare_many_rejects_empty_input():
+    from hamradio.cwcompare import compare_many
+
+    try:
+        compare_many([])
+    except ValueError as exc:
+        assert "no WAV" in str(exc)
+    else:
+        raise AssertionError("empty comparison must fail")
+
+
+def test_dsp_timeout_is_enforced(monkeypatch, tmp_path):
+    from hamradio import cwcompare
+
+    wav = tmp_path / "x.wav"
+    wav.write_bytes(b"exists")
+    sleeper = tmp_path / "slow-python"
+    sleeper.write_text("#!/bin/sh\nsleep 2\n")
+    sleeper.chmod(0o755)
+    monkeypatch.setenv("CW_DSP_PYTHON", str(sleeper))
+    got = cwcompare.compare_wav(wav, engines=("dsp",), timeout=0.05)
+    assert got["engines"][0]["returncode"] == 124
+    assert got["engines"][0]["error"] == "timeout"

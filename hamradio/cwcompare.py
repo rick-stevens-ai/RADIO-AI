@@ -73,8 +73,8 @@ def _valid_call_part(part: str, *, require_digit: bool) -> bool:
 
 
 def _is_callsign(token: str) -> bool:
-    """Conservative structural check; credibility still requires agreement."""
-    if not 3 <= len(token) <= 12 or token.count("/") > 1:
+    """Structural and allocation check; credibility still requires agreement."""
+    if not 4 <= len(token) <= 12 or token.count("/") > 1:
         return False
     base, sep, suffix = token.partition("/")
     if not _valid_call_part(base, require_digit=True):
@@ -92,6 +92,13 @@ def _is_callsign(token: str) -> bool:
     # Digit-leading allocations (for example 5Z4VJ) carry another district
     # digit; this excludes shorthand signal reports such as 5NN.
     if base[0].isdigit() and len(digit_positions) < 2:
+        return False
+    try:
+        from . import location
+        lookup = location.lookup(base)
+    except Exception:
+        return False
+    if not lookup.get("sources") or lookup.get("note") == "unknown callsign/prefix":
         return False
     return True
 
@@ -162,18 +169,24 @@ def compare_wav(
         raise FileNotFoundError(f"CW source WAV not found: {wav_path}")
     results: list[EngineResult] = []
     dsp_wpm = 25
+    if timeout <= 0:
+        raise ValueError("timeout must be positive")
     if "dsp" in engines:
         started = time.monotonic()
-        try:
-            from . import cwdecode
-            payload = cwdecode.decode(str(wav_path), smart=False)
-            dsp_wpm = int(payload.get("wpm") or 25)
-            results.append(EngineResult("dsp", normalize_text(payload.get("text", "")),
-                                        0, time.monotonic() - started,
-                                        payload.get("note")))
-        except Exception as exc:
-            results.append(EngineResult("dsp", "", 1, time.monotonic() - started,
-                                        f"{type(exc).__name__}: {exc}"))
+        dsp_root = os.environ.get("CW_DSP_ROOT", str(Path.home() / "radio/agent"))
+        command = [
+            os.environ.get("CW_DSP_PYTHON", "python3"), "-c",
+            "import json,sys; sys.path.insert(0, sys.argv[2]); "
+            "from hamradio import cwdecode; "
+            "print(json.dumps(cwdecode.decode(sys.argv[1], smart=False)))",
+            str(wav_path), dsp_root,
+        ]
+        dsp_result = run_command_engine(
+            "dsp", command, wav_path, timeout=timeout, parser=extract_json_text
+        )
+        results.append(dsp_result)
+        # External models need a WPM hint only; avoid trusting a timed-out DSP.
+        dsp_wpm = 25
     commands = default_engine_commands(dsp_wpm)
     for name in engines:
         if name == "dsp":
@@ -202,7 +215,10 @@ def compare_many(
     *,
     timeout: float = 90.0,
 ) -> dict:
-    windows = [compare_wav(path, engines, timeout=timeout) for path in wav_paths]
+    paths = [Path(path) for path in wav_paths]
+    if not paths:
+        raise ValueError("no WAV files provided for comparison")
+    windows = [compare_wav(path, engines, timeout=timeout) for path in paths]
     return {
         "windows": windows,
         "window_count": len(windows),

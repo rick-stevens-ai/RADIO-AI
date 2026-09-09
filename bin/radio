@@ -408,7 +408,7 @@ def main():
     _NO_RIG = {"js8", "js8-send", "js8-status", "js8-sms", "js8-email",
                "js8-text",
                "js8-inbox", "js8-store", "whois", "whois-rebuild",
-               "whohearsme", "clock", "audio-devices",
+               "whohearsme", "clock", "audio-devices", "cw-compare",
                "wspr-encode", "wspr-spots", "tune", "psk-encode", "rtty-encode",
                "swbc", "swbc-freq", "swbc-bands", "speech-models",
                "translate", "translate-info",
