@@ -43,11 +43,12 @@ SPEED_NAME = {0: "Slow", 1: "Normal", 2: "Fast", 4: "Turbo"}
 
 
 def is_running() -> bool:
-    try:
-        subprocess.check_output(["pgrep", "-f", "js8call"])
-        return True
-    except subprocess.CalledProcessError:
-        return False
+    """Return true only for an actual JS8Call process, not a matching shell."""
+    return subprocess.run(
+        ["pgrep", "-x", "js8call"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ).returncode == 0
 
 
 def api_up(timeout: float = 1.5) -> bool:
@@ -88,14 +89,14 @@ def ensure_running(wait_s: float = 40.0) -> dict:
     IMPORTANT: probe with pgrep, NOT by opening a TCP socket. JS8Call's API
     wedges if a client connects and disconnects immediately before another
     connects, so we must avoid any throw-away socket before the real one."""
-    if is_running():
+    if is_running() and api_up():
         return {"started": False, "api": True, "note": "already running"}
-    import os, tempfile
-    path = os.path.join(tempfile.gettempdir(), "start_js8.sh")
-    with open(path, "w") as f:
-        f.write(_LAUNCHER)
-    os.chmod(path, 0o755)
-    subprocess.Popen(["tmux", "new-session", "-d", "-s", "js8", path])
+    # One supervised startup path. The user service owns Xvfb, D-Bus and JS8Call;
+    # this avoids tmux dependency and orphan/stale process false positives.
+    subprocess.run(
+        ["systemctl", "--user", "start", "js8call.service"],
+        check=True, capture_output=True, text=True,
+    )
     t0 = time.time()
     while time.time() - t0 < wait_s:
         if api_up():

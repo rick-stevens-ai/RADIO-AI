@@ -1,23 +1,17 @@
 [Unit]
-Description=JS8Call (headless, accessibility-enabled) for KD9NWA radio agent
-After=network-online.target rigctld.service sound.target
+Description=JS8Call headless environment for KD9NWA
+After=network-online.target rigctld.service pipewire.service
 Wants=rigctld.service
 
 [Service]
 Type=simple
-User=stevens
-# Xvfb :99 + openbox (WM for dialog focus) + dbus session with the AT-SPI
-# accessibility bus (required so the agent can actuate JS8Call's 'Send' button)
-# + JS8Call. TX will not key without RX monitoring on; the radio agent's
-# hamradio.js8.ensure_tx_ready() sets the RX/TX/autoreply/SPOT toggles via AT-SPI.
-Environment=DISPLAY=:99
-Environment=QT_ACCESSIBILITY=1
-Environment=QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1
-Environment=NO_AT_BRIDGE=0
-ExecStartPre=/bin/bash -c 'pgrep -f "Xvfb :99" >/dev/null || (Xvfb :99 -screen 0 1200x800x16 >/tmp/xvfb99.log 2>&1 &); sleep 2; pgrep -x openbox >/dev/null || (DISPLAY=:99 openbox >/tmp/openbox.log 2>&1 &); sleep 1'
-ExecStart=/usr/bin/dbus-run-session -- bash -c '/usr/libexec/at-spi-bus-launcher --launch-immediately & sleep 2; exec js8call 2>&1 | tee /tmp/js8call.log'
+ExecStart=%h/radio/agent/bin/js8call-headless
 Restart=on-failure
 RestartSec=5
+TimeoutStopSec=15
+KillMode=control-group
 
+# Deliberately not enabled at boot: JS8Call is started on demand because it
+# shares CAT/audio resources with FT8, CW, and station scan operations.
 [Install]
 WantedBy=default.target

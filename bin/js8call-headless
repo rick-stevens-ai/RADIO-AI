@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export DISPLAY=:99
+export QT_ACCESSIBILITY=1
+export QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1
+export NO_AT_BRIDGE=0
+XVFB="$HOME/radio/tools/xvfb/usr/bin/Xvfb"
+if [ ! -x "$XVFB" ]; then
+  echo "missing user-local Xvfb: $XVFB" >&2
+  exit 1
+fi
+"$XVFB" :99 -screen 0 1200x800x16 -nolisten tcp >/tmp/xvfb99.log 2>&1 &
+xpid=$!
+jpid=""
+cleanup(){
+  [ -n "$jpid" ] && kill "$jpid" 2>/dev/null || true
+  kill "$xpid" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 0' INT TERM
+for _ in $(seq 1 30); do [ -S /tmp/.X11-unix/X99 ] && break; sleep 0.1; done
+[ -S /tmp/.X11-unix/X99 ] || { echo "Xvfb display :99 did not become ready" >&2; exit 1; }
+/usr/bin/dbus-run-session -- /usr/bin/js8call &
+jpid=$!
+wait "$jpid"
