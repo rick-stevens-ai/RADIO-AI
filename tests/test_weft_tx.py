@@ -64,7 +64,7 @@ def test_dry_run_validates_everything_without_mode_change_or_keying(tmp_path, mo
     wav, manifest = package(tmp_path)
     rig = FakeRig()
     keyed = []
-    monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
+    monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: False)
     monkeypatch.setattr(weft.txmod, "_check_guards", lambda *a, **k: None)
     monkeypatch.setattr(weft.txmod, "keyed", lambda *a, **k: keyed.append(True))
     result = weft.send(rig, wav, manifest, station_callsign="KD9NWA", dry_run=True)

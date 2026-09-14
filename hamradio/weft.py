@@ -163,15 +163,15 @@ def send(rig, wav_path: str | pathlib.Path, manifest_path: str | pathlib.Path, *
     timeout = min(txmod.TX_HARD_CEILING, max(1, math.ceil(package["duration_s"]) + 5))
     if int(rig.get_freq()) != package["dial_hz"]:
         raise WeftRefused("rig frequency does not match manifest dial_hz")
+    if dry_run:
+        # Validation-only rehearsal: never require or enter the live TX gates.
+        # Static frequency/duration checks were already enforced above.
+        return {**package, "dry_run": True, "would_key_for_s": timeout}
     if not txmod.tx_globally_enabled():
         raise WeftRefused("TX master switch is off")
-    if not allow_tx and not dry_run:
+    if not allow_tx:
         raise WeftRefused("--allow-tx is required for real transmission")
-    # Re-run the central guard even in dry-run; tx.keyed is intentionally not
-    # entered below, which proves dry-run cannot assert PTT.
-    txmod._check_guards(package["dial_hz"], allow_tx, timeout, dry_run=dry_run)
-    if dry_run:
-        return {**package, "dry_run": True, "would_key_for_s": timeout}
+    txmod._check_guards(package["dial_hz"], allow_tx, timeout, dry_run=False)
 
     original_mode = original_pb = None
     changed = False
