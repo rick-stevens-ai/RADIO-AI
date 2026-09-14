@@ -30,7 +30,11 @@ import sys
 import time
 import pathlib
 
-sys.path.insert(0, os.path.expanduser("~/radio/agent"))
+# Prefer the checkout containing this script (including isolated worktrees),
+# while retaining the installed station path fallback.
+_REPO_ROOT = str(pathlib.Path(__file__).resolve().parent.parent)
+sys.path.insert(0, _REPO_ROOT)
+sys.path.append(os.path.expanduser("~/radio/agent"))
 from hamradio import Rig, RigError                      # noqa: E402
 from hamradio import scan as scanmod                    # noqa: E402
 from hamradio import decode as decodemod                # noqa: E402
@@ -38,6 +42,7 @@ from hamradio import audio as audiomod                  # noqa: E402
 from hamradio import tx as txmod                        # noqa: E402
 from hamradio import generate as genmod                 # noqa: E402
 from hamradio import ft8 as ft8mod                      # noqa: E402
+from hamradio import weft as weftmod                    # noqa: E402
 from hamradio import pskreporter as pskmod              # noqa: E402
 from hamradio import location as locmod                 # noqa: E402
 
@@ -325,6 +330,12 @@ def main():
     p.add_argument("--allow-tx", action="store_true", help="required to actually key")
     p.add_argument("--timeout", type=int, default=0, help="max key-down s (0=auto)")
     p.add_argument("--dry-run", action="store_true", help="simulate, do not key")
+
+    p = sub.add_parser("weft-send", help="validate + transmit a measured WEFT WAV (gated)")
+    p.add_argument("wav", help="12 kHz mono 16-bit PCM WAV")
+    p.add_argument("manifest", help="radio-ai-weft-tx-v1 JSON manifest")
+    p.add_argument("--allow-tx", action="store_true", help="required to actually key")
+    p.add_argument("--dry-run", action="store_true", help="validate only; never key")
 
     p = sub.add_parser("send-psk", help="GENERATE + transmit BPSK31/63/125 text (gated)")
     p.add_argument("text")
@@ -811,6 +822,11 @@ def main():
             out(genmod.send_cw(rig, args.text, wpm=args.wpm, method=args.method,
                                tone_hz=args.tone, allow_tx=args.allow_tx,
                                timeout=(args.timeout or None), dry_run=args.dry_run))
+
+        elif args.cmd == "weft-send":
+            out(weftmod.send(rig, args.wav, args.manifest,
+                             station_callsign=MY_CALL,
+                             allow_tx=args.allow_tx, dry_run=args.dry_run))
 
         elif args.cmd == "send-psk":
             out(genmod.send_psk(rig, args.text, mode=args.mode,
