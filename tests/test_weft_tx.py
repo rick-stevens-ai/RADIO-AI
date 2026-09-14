@@ -15,6 +15,14 @@ class FakeRig:
         self.mode = mode
         self.power = power
         self.commands = []
+        self.swr = 1.1
+        self.alc = 0.0
+
+    def get_swr(self):
+        return self.swr
+
+    def get_alc(self):
+        return self.alc
 
     def get_freq(self):
         return self.freq
@@ -53,6 +61,8 @@ def package(tmp_path, *, rate=12000, channels=1, width=2, seconds=1.0,
         "profile": "WEFT-400",
         "occupied_bandwidth_hz": 390,
         "bandwidth_measurement": "99pct-power",
+        "max_swr": 2.0,
+        "max_alc": 1.0,
     }
     manifest.update(manifest_updates or {})
     manifest_path = tmp_path / "frame.json"
@@ -124,6 +134,9 @@ def test_positive_forward_power_succeeds(tmp_path, monkeypatch):
     result = weft.send(rig, wav, manifest, station_callsign="KD9NWA", allow_tx=True)
     assert result["sent"] is True
     assert result["fwd_power"] == 0.001
+    assert result["max_swr"] == 1.1
+    assert result["max_alc"] == 0.0
+    assert result["safety_samples"]
     assert rig.mode == "USB"
 
 
@@ -174,3 +187,17 @@ def test_real_send_requires_both_tx_gates(tmp_path, monkeypatch):
     monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
     with pytest.raises(weft.WeftRefused, match="--allow-tx"):
         weft.send(FakeRig(), wav, manifest, station_callsign="KD9NWA")
+
+
+def test_real_send_refuses_missing_swr_or_alc_telemetry(tmp_path, monkeypatch):
+    wav, manifest = package(tmp_path)
+    rig = FakeRig()
+    rig.swr = None
+    monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
+    monkeypatch.setattr(weft.generate, "_play_and_measure", lambda *a: 1.0)
+    @contextmanager
+    def fake_keyed(rig, **kwargs):
+        yield {"freq_hz": rig.freq}
+    monkeypatch.setattr(weft.txmod, "keyed", fake_keyed)
+    with pytest.raises(weft.WeftRefused, match="SWR/ALC telemetry unavailable"):
+        weft.send(rig, wav, manifest, station_callsign="KD9NWA", allow_tx=True)

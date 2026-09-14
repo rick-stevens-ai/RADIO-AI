@@ -11,6 +11,8 @@ import hashlib
 import json
 import math
 import pathlib
+import threading
+import time
 import wave
 from typing import Any
 
@@ -94,6 +96,10 @@ def validate_package(wav_path: str | pathlib.Path,
     if bandwidth <= 0 or bandwidth > PROFILE_BANDWIDTH_HZ[profile]:
         raise WeftRefused("measured occupied bandwidth exceeds profile bandwidth")
     measurement = manifest["bandwidth_measurement"]
+    max_swr = _number(manifest.get("max_swr", 2.0), "max_swr")
+    max_alc = _number(manifest.get("max_alc", 1.0), "max_alc")
+    if max_swr < 1.0 or max_alc < 0.0:
+        raise WeftRefused("manifest SWR/ALC limits are invalid")
     if measurement not in ("99pct-power", "99%-power"):
         raise WeftRefused("premeasured 99%-power bandwidth metadata is required")
 
@@ -151,7 +157,27 @@ def validate_package(wav_path: str | pathlib.Path,
         "profile": profile,
         "occupied_bandwidth_hz": bandwidth,
         "peak_pcm": peak,
+        "max_swr_limit": max_swr,
+        "max_alc_limit": max_alc,
     }
+
+
+def _safety_sampler(rig):
+    samples = []
+    stop = threading.Event()
+    missing = []
+    def sample():
+        while not stop.is_set():
+            swr = rig.get_swr()
+            alc = rig.get_alc()
+            if swr is None or alc is None:
+                missing.append(True)
+            else:
+                samples.append({"monotonic_s": time.monotonic(), "swr": swr, "alc": alc})
+            stop.wait(0.25)
+    thread = threading.Thread(target=sample, daemon=True)
+    thread.start()
+    return stop, thread, samples, missing
 
 
 def send(rig, wav_path: str | pathlib.Path, manifest_path: str | pathlib.Path, *,
@@ -177,16 +203,32 @@ def send(rig, wav_path: str | pathlib.Path, manifest_path: str | pathlib.Path, *
     changed = False
     try:
         original_mode, original_pb, changed = generate._ensure_data_mode(rig)
-        with txmod.keyed(rig, allow_tx=True, timeout=timeout) as keyed:
-            forward_power = generate._play_and_measure(rig, str(wav_path))
+        stop, sampler, safety_samples, missing_telemetry = _safety_sampler(rig)
+        try:
+            with txmod.keyed(rig, allow_tx=True, timeout=timeout) as keyed:
+                forward_power = generate._play_and_measure(rig, str(wav_path))
+        finally:
+            stop.set()
+            sampler.join(timeout=1)
         if forward_power <= POWER_EPSILON_W:
             raise WeftRefused("no positive forward power measured; transmission failed")
+        if missing_telemetry or not safety_samples:
+            raise WeftRefused("SWR/ALC telemetry unavailable")
+        max_swr = max(row["swr"] for row in safety_samples)
+        max_alc = max(row["alc"] for row in safety_samples)
+        if max_swr > package["max_swr_limit"]:
+            raise WeftRefused(f"SWR exceeded manifest limit: {max_swr}")
+        if max_alc > package["max_alc_limit"]:
+            raise WeftRefused(f"ALC exceeded manifest limit: {max_alc}")
         return {
             **package,
             "dry_run": False,
             "sent": True,
             "freq_hz": keyed.get("freq_hz"),
             "fwd_power": forward_power,
+            "max_swr": max_swr,
+            "max_alc": max_alc,
+            "safety_samples": safety_samples,
             "tx_mode": rig.get_mode()[0],
         }
     finally:

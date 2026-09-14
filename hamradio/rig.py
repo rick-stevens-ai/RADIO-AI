@@ -167,6 +167,24 @@ class Rig:
                     continue
         return None
 
+    def _get_float_level(self, level: str) -> Optional[float]:
+        try:
+            raw = self._cmd(f"get_level {level}")
+        except RigError:
+            return None
+        for line in raw:
+            try:
+                return float(line.strip())
+            except ValueError:
+                continue
+        return None
+
+    def get_swr(self) -> Optional[float]:
+        return self._get_float_level("SWR")
+
+    def get_alc(self) -> Optional[float]:
+        return self._get_float_level("ALC")
+
     def status(self) -> "RigStatus":
         freq = self.get_freq()
         mode, pb = self.get_mode()
