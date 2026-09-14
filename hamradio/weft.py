@@ -98,7 +98,8 @@ def validate_package(wav_path: str | pathlib.Path,
     measurement = manifest["bandwidth_measurement"]
     max_swr = _number(manifest.get("max_swr", 2.0), "max_swr")
     max_alc = _number(manifest.get("max_alc", 1.0), "max_alc")
-    if max_swr < 1.0 or max_alc < 0.0:
+    max_forward_power = _number(manifest.get("max_forward_power_w", 10.0), "max_forward_power_w")
+    if max_swr < 1.0 or max_alc < 0.0 or max_forward_power <= 0.0:
         raise WeftRefused("manifest SWR/ALC limits are invalid")
     if measurement not in ("99pct-power", "99%-power"):
         raise WeftRefused("premeasured 99%-power bandwidth metadata is required")
@@ -159,25 +160,42 @@ def validate_package(wav_path: str | pathlib.Path,
         "peak_pcm": peak,
         "max_swr_limit": max_swr,
         "max_alc_limit": max_alc,
+        "max_forward_power_w": max_forward_power,
     }
 
 
-def _safety_sampler(rig):
+def _play_and_monitor(rig, wav: str):
+    """Play audio in one thread while one CAT reader samples all meters."""
     samples = []
-    stop = threading.Event()
     missing = []
-    def sample():
-        while not stop.is_set():
-            swr = rig.get_swr()
-            alc = rig.get_alc()
-            if swr is None or alc is None:
-                missing.append(True)
-            else:
-                samples.append({"monotonic_s": time.monotonic(), "swr": swr, "alc": alc})
-            stop.wait(0.25)
-    thread = threading.Thread(target=sample, daemon=True)
-    thread.start()
-    return stop, thread, samples, missing
+    playback_errors = []
+    def play():
+        try:
+            generate.audiomod.play_wav(wav)
+        except BaseException as exc:
+            playback_errors.append(exc)
+    player = threading.Thread(target=play, daemon=True)
+    player.start()
+    while True:
+        forward_w = rig.get_fwd_power()
+        swr = rig.get_swr()
+        alc = rig.get_alc()
+        if forward_w is None or swr is None or alc is None:
+            missing.append(True)
+        else:
+            samples.append({
+                "monotonic_s": time.monotonic(),
+                "forward_power_w": forward_w,
+                "swr": swr,
+                "alc": alc,
+            })
+        if not player.is_alive():
+            break
+        time.sleep(0.25)
+    player.join(timeout=1)
+    if playback_errors:
+        raise playback_errors[0]
+    return samples, missing
 
 
 def send(rig, wav_path: str | pathlib.Path, manifest_path: str | pathlib.Path, *,
@@ -203,17 +221,15 @@ def send(rig, wav_path: str | pathlib.Path, manifest_path: str | pathlib.Path, *
     changed = False
     try:
         original_mode, original_pb, changed = generate._ensure_data_mode(rig)
-        stop, sampler, safety_samples, missing_telemetry = _safety_sampler(rig)
-        try:
-            with txmod.keyed(rig, allow_tx=True, timeout=timeout) as keyed:
-                forward_power = generate._play_and_measure(rig, str(wav_path))
-        finally:
-            stop.set()
-            sampler.join(timeout=1)
-        if forward_power <= POWER_EPSILON_W:
-            raise WeftRefused("no positive forward power measured; transmission failed")
+        with txmod.keyed(rig, allow_tx=True, timeout=timeout) as keyed:
+            safety_samples, missing_telemetry = _play_and_monitor(rig, str(wav_path))
         if missing_telemetry or not safety_samples:
             raise WeftRefused("SWR/ALC telemetry unavailable")
+        forward_power = max(row["forward_power_w"] for row in safety_samples)
+        if forward_power <= POWER_EPSILON_W:
+            raise WeftRefused("no positive forward power measured; transmission failed")
+        if forward_power > package["max_forward_power_w"]:
+            raise WeftRefused(f"forward power exceeded manifest limit: {forward_power}")
         max_swr = max(row["swr"] for row in safety_samples)
         max_alc = max(row["alc"] for row in safety_samples)
         if max_swr > package["max_swr_limit"]:

@@ -18,6 +18,9 @@ class FakeRig:
         self.swr = 1.1
         self.alc = 0.0
 
+    def get_fwd_power(self):
+        return self.power
+
     def get_swr(self):
         return self.swr
 
@@ -63,6 +66,7 @@ def package(tmp_path, *, rate=12000, channels=1, width=2, seconds=1.0,
         "bandwidth_measurement": "99pct-power",
         "max_swr": 2.0,
         "max_alc": 1.0,
+        "max_forward_power_w": 10.0,
     }
     manifest.update(manifest_updates or {})
     manifest_path = tmp_path / "frame.json"
@@ -126,7 +130,7 @@ def test_positive_forward_power_succeeds(tmp_path, monkeypatch):
     wav, manifest = package(tmp_path)
     rig = FakeRig()
     monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
-    monkeypatch.setattr(weft.generate, "_play_and_measure", lambda *a: 0.001)
+    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a: ([{"monotonic_s": 1.0, "forward_power_w": 0.001, "swr": 1.1, "alc": 0.0}], []))
     @contextmanager
     def fake_keyed(rig, **kwargs):
         yield {"freq_hz": rig.freq}
@@ -143,7 +147,7 @@ def test_positive_forward_power_succeeds(tmp_path, monkeypatch):
 def test_zero_forward_power_fails_and_restores_mode(tmp_path, monkeypatch):
     wav, manifest = package(tmp_path)
     rig = FakeRig(power=0)
-    monkeypatch.setattr(weft.generate, "_play_and_measure", lambda *a: 0.0)
+    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a: ([{"monotonic_s": 1.0, "forward_power_w": 0.0, "swr": 1.1, "alc": 0.0}], []))
     monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
     @contextmanager
     def fake_keyed(rig, **kwargs):
@@ -171,7 +175,7 @@ def test_playback_error_unkeys_and_restores_mode(tmp_path, monkeypatch):
         finally:
             rig._cmd("set_ptt 0")
     monkeypatch.setattr(weft.txmod, "keyed", fake_keyed)
-    monkeypatch.setattr(weft.generate, "_play_and_measure",
+    monkeypatch.setattr(weft, "_play_and_monitor",
                         lambda *a: (_ for _ in ()).throw(RuntimeError("play failed")))
     with pytest.raises(RuntimeError, match="play failed"):
         weft.send(rig, wav, manifest, station_callsign="KD9NWA", allow_tx=True)
@@ -194,10 +198,23 @@ def test_real_send_refuses_missing_swr_or_alc_telemetry(tmp_path, monkeypatch):
     rig = FakeRig()
     rig.swr = None
     monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
-    monkeypatch.setattr(weft.generate, "_play_and_measure", lambda *a: 1.0)
+    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a: ([], [True]))
     @contextmanager
     def fake_keyed(rig, **kwargs):
         yield {"freq_hz": rig.freq}
     monkeypatch.setattr(weft.txmod, "keyed", fake_keyed)
     with pytest.raises(weft.WeftRefused, match="SWR/ALC telemetry unavailable"):
+        weft.send(rig, wav, manifest, station_callsign="KD9NWA", allow_tx=True)
+
+
+def test_real_send_refuses_forward_power_above_manifest_limit(tmp_path, monkeypatch):
+    wav, manifest = package(tmp_path)
+    rig = FakeRig()
+    monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
+    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a: ([{"monotonic_s": 1.0, "forward_power_w": 11.0, "swr": 1.1, "alc": 0.0}], []))
+    @contextmanager
+    def fake_keyed(rig, **kwargs):
+        yield {"freq_hz": rig.freq}
+    monkeypatch.setattr(weft.txmod, "keyed", fake_keyed)
+    with pytest.raises(weft.WeftRefused, match="forward power exceeded"):
         weft.send(rig, wav, manifest, station_callsign="KD9NWA", allow_tx=True)
