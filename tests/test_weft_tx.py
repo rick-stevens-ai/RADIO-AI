@@ -130,7 +130,7 @@ def test_positive_forward_power_succeeds(tmp_path, monkeypatch):
     wav, manifest = package(tmp_path)
     rig = FakeRig()
     monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
-    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a: ([{"monotonic_s": 1.0, "forward_power_w": 0.001, "swr": 1.1, "alc": 0.0}], []))
+    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a, **k: ([{"monotonic_s": 1.0, "forward_power_w": 0.001, "swr": 1.1, "alc": 0.0}], []))
     @contextmanager
     def fake_keyed(rig, **kwargs):
         yield {"freq_hz": rig.freq}
@@ -147,7 +147,7 @@ def test_positive_forward_power_succeeds(tmp_path, monkeypatch):
 def test_zero_forward_power_fails_and_restores_mode(tmp_path, monkeypatch):
     wav, manifest = package(tmp_path)
     rig = FakeRig(power=0)
-    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a: ([{"monotonic_s": 1.0, "forward_power_w": 0.0, "swr": 1.1, "alc": 0.0}], []))
+    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a, **k: ([{"monotonic_s": 1.0, "forward_power_w": 0.0, "swr": 1.1, "alc": 0.0}], []))
     monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
     @contextmanager
     def fake_keyed(rig, **kwargs):
@@ -176,7 +176,7 @@ def test_playback_error_unkeys_and_restores_mode(tmp_path, monkeypatch):
             rig._cmd("set_ptt 0")
     monkeypatch.setattr(weft.txmod, "keyed", fake_keyed)
     monkeypatch.setattr(weft, "_play_and_monitor",
-                        lambda *a: (_ for _ in ()).throw(RuntimeError("play failed")))
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("play failed")))
     with pytest.raises(RuntimeError, match="play failed"):
         weft.send(rig, wav, manifest, station_callsign="KD9NWA", allow_tx=True)
     assert rig.mode == "USB"
@@ -198,7 +198,7 @@ def test_real_send_refuses_missing_swr_or_alc_telemetry(tmp_path, monkeypatch):
     rig = FakeRig()
     rig.swr = None
     monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
-    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a: ([], [True]))
+    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a, **k: ([], [True]))
     @contextmanager
     def fake_keyed(rig, **kwargs):
         yield {"freq_hz": rig.freq}
@@ -211,10 +211,53 @@ def test_real_send_refuses_forward_power_above_manifest_limit(tmp_path, monkeypa
     wav, manifest = package(tmp_path)
     rig = FakeRig()
     monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
-    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a: ([{"monotonic_s": 1.0, "forward_power_w": 11.0, "swr": 1.1, "alc": 0.0}], []))
+    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a, **k: ([{"monotonic_s": 1.0, "forward_power_w": 11.0, "swr": 1.1, "alc": 0.0}], []))
     @contextmanager
     def fake_keyed(rig, **kwargs):
         yield {"freq_hz": rig.freq}
     monkeypatch.setattr(weft.txmod, "keyed", fake_keyed)
     with pytest.raises(weft.WeftRefused, match="forward power exceeded"):
         weft.send(rig, wav, manifest, station_callsign="KD9NWA", allow_tx=True)
+
+
+def test_monitor_aborts_player_immediately_on_swr_limit(monkeypatch):
+    class Player:
+        def __init__(self):
+            self.alive = True
+            self.terminated = False
+        def poll(self):
+            return None if self.alive else 0
+        def terminate(self):
+            self.terminated = True
+            self.alive = False
+        def wait(self, timeout=None):
+            return 0
+    player = Player()
+    rig = FakeRig()
+    rig.swr = 3.0
+    monkeypatch.setattr(weft, "_start_player", lambda wav: player)
+    with pytest.raises(weft.WeftRefused, match="SWR exceeded"):
+        weft._play_and_monitor(rig, "x.wav", max_swr=2.0,
+                               max_alc=1.0, max_forward=10.0)
+    assert player.terminated
+
+
+def test_monitor_aborts_player_immediately_on_power_limit(monkeypatch):
+    class Player:
+        def __init__(self):
+            self.alive = True
+            self.terminated = False
+        def poll(self):
+            return None if self.alive else 0
+        def terminate(self):
+            self.terminated = True
+            self.alive = False
+        def wait(self, timeout=None):
+            return 0
+    player = Player()
+    rig = FakeRig(power=11.0)
+    monkeypatch.setattr(weft, "_start_player", lambda wav: player)
+    with pytest.raises(weft.WeftRefused, match="forward power exceeded"):
+        weft._play_and_monitor(rig, "x.wav", max_swr=2.0,
+                               max_alc=1.0, max_forward=10.0)
+    assert player.terminated

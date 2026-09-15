@@ -11,6 +11,8 @@ import hashlib
 import json
 import math
 import pathlib
+import shutil
+import subprocess
 import threading
 import time
 import wave
@@ -164,37 +166,71 @@ def validate_package(wav_path: str | pathlib.Path,
     }
 
 
-def _play_and_monitor(rig, wav: str):
-    """Play audio in one thread while one CAT reader samples all meters."""
+def _start_player(wav: str):
+    sink = generate.audiomod.find_playback_sink()
+    if sink and shutil.which("pw-play"):
+        command = ["pw-play", "--target", sink, wav]
+    elif sink and shutil.which("paplay"):
+        command = ["paplay", "-d", sink, wav]
+    else:
+        alsa = generate.audiomod.find_alsa_playback()
+        if not alsa:
+            raise WeftRefused("no IC-7300 playback device found")
+        command = ["aplay", "-D", alsa, wav]
+    return subprocess.Popen(command, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL)
+
+
+def _stop_player(player) -> None:
+    if player.poll() is not None:
+        return
+    player.terminate()
+    try:
+        player.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        player.kill()
+        player.wait(timeout=1)
+
+
+def _play_and_monitor(rig, wav: str, *, max_swr: float,
+                      max_alc: float, max_forward: float):
+    """Play audio while one CAT reader enforces every RF safety threshold."""
     samples = []
     missing = []
-    playback_errors = []
-    def play():
-        try:
-            generate.audiomod.play_wav(wav)
-        except BaseException as exc:
-            playback_errors.append(exc)
-    player = threading.Thread(target=play, daemon=True)
-    player.start()
-    while True:
-        forward_w = rig.get_fwd_power()
-        swr = rig.get_swr()
-        alc = rig.get_alc()
-        if forward_w is None or swr is None or alc is None:
-            missing.append(True)
-        else:
-            samples.append({
+    player = _start_player(wav)
+    try:
+        while True:
+            forward_w = rig.get_fwd_power()
+            swr = rig.get_swr()
+            alc = rig.get_alc()
+            if forward_w is None or swr is None or alc is None:
+                missing.append(True)
+                _stop_player(player)
+                raise WeftRefused("SWR/ALC telemetry unavailable")
+            row = {
                 "monotonic_s": time.monotonic(),
                 "forward_power_w": forward_w,
                 "swr": swr,
                 "alc": alc,
-            })
-        if not player.is_alive():
-            break
-        time.sleep(0.25)
-    player.join(timeout=1)
-    if playback_errors:
-        raise playback_errors[0]
+            }
+            samples.append(row)
+            if forward_w > max_forward:
+                _stop_player(player)
+                raise WeftRefused(
+                    f"forward power exceeded manifest limit: {forward_w}")
+            if swr > max_swr:
+                _stop_player(player)
+                raise WeftRefused(f"SWR exceeded manifest limit: {swr}")
+            if alc > max_alc:
+                _stop_player(player)
+                raise WeftRefused(f"ALC exceeded manifest limit: {alc}")
+            if player.poll() is not None:
+                if player.poll() != 0:
+                    raise RuntimeError(f"audio player exited {player.poll()}")
+                break
+            time.sleep(0.25)
+    finally:
+        _stop_player(player)
     return samples, missing
 
 
@@ -222,7 +258,12 @@ def send(rig, wav_path: str | pathlib.Path, manifest_path: str | pathlib.Path, *
     try:
         original_mode, original_pb, changed = generate._ensure_data_mode(rig)
         with txmod.keyed(rig, allow_tx=True, timeout=timeout) as keyed:
-            safety_samples, missing_telemetry = _play_and_monitor(rig, str(wav_path))
+            safety_samples, missing_telemetry = _play_and_monitor(
+                rig, str(wav_path),
+                max_swr=package["max_swr_limit"],
+                max_alc=package["max_alc_limit"],
+                max_forward=package["max_forward_power_w"],
+            )
         if missing_telemetry or not safety_samples:
             raise WeftRefused("SWR/ALC telemetry unavailable")
         forward_power = max(row["forward_power_w"] for row in safety_samples)
