@@ -78,8 +78,9 @@ class Rig:
                     raise RigError(f"timeout waiting for reply to {line!r}")
                 try:
                     chunk = s.recv(4096)
-                except socket.timeout:
-                    raise RigError(f"socket timeout on {line!r}")
+                except (socket.timeout, ConnectionResetError, ConnectionAbortedError,
+                        BrokenPipeError, OSError) as exc:
+                    raise RigError(f"socket failure on {line!r}: {exc}") from exc
                 if not chunk:
                     break
                 buf += chunk

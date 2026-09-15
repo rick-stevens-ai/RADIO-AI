@@ -280,7 +280,7 @@ def send(rig, wav_path: str | pathlib.Path, manifest_path: str | pathlib.Path, *
                 max_alc=package["max_alc_limit"],
                 max_forward=package["max_forward_power_w"],
             )
-        if missing_telemetry or not safety_samples:
+        if not safety_samples:
             raise WeftRefused("SWR/ALC telemetry unavailable")
         forward_power = max(row["forward_power_w"] for row in safety_samples)
         if forward_power <= POWER_EPSILON_W:
@@ -302,6 +302,7 @@ def send(rig, wav_path: str | pathlib.Path, manifest_path: str | pathlib.Path, *
             "max_swr": max_swr,
             "max_alc": max_alc,
             "safety_samples": safety_samples,
+            "telemetry_missing_poll_count": len(missing_telemetry),
             "tx_mode": rig.get_mode()[0],
         }
     finally:

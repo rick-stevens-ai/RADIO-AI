@@ -315,3 +315,21 @@ def test_monitor_aborts_on_third_consecutive_telemetry_miss(monkeypatch):
             MissingRig(), "x.wav", max_swr=2.0,
             max_alc=1.0, max_forward=10.0)
     assert player.terminated
+
+
+def test_send_accepts_bounded_transient_telemetry_miss(tmp_path, monkeypatch):
+    wav, manifest = package(tmp_path)
+    rig = FakeRig()
+    monkeypatch.setattr(weft.txmod, "tx_globally_enabled", lambda: True)
+    samples = [
+        {"monotonic_s": 1.0, "forward_power_w": 1.0, "swr": 1.1, "alc": 0.1},
+        {"monotonic_s": 1.5, "forward_power_w": 1.0, "swr": 1.1, "alc": 0.1},
+    ]
+    monkeypatch.setattr(weft, "_play_and_monitor", lambda *a, **k: (samples, [True]))
+    @contextmanager
+    def fake_keyed(rig, **kwargs):
+        yield {"freq_hz": rig.freq}
+    monkeypatch.setattr(weft.txmod, "keyed", fake_keyed)
+    result = weft.send(rig, wav, manifest, station_callsign="KD9NWA", allow_tx=True)
+    assert result["sent"] is True
+    assert result["telemetry_missing_poll_count"] == 1
