@@ -197,6 +197,8 @@ def _play_and_monitor(rig, wav: str, *, max_swr: float,
     """Play audio while one CAT reader enforces every RF safety threshold."""
     samples = []
     missing = []
+    consecutive_missing = 0
+    started = time.monotonic()
     player = _start_player(wav)
     try:
         while True:
@@ -205,8 +207,22 @@ def _play_and_monitor(rig, wav: str, *, max_swr: float,
             alc = rig.get_alc()
             if forward_w is None or swr is None or alc is None:
                 missing.append(True)
-                _stop_player(player)
-                raise WeftRefused("SWR/ALC telemetry unavailable")
+                consecutive_missing += 1
+                if consecutive_missing >= 3:
+                    _stop_player(player)
+                    raise WeftRefused(
+                        "telemetry unavailable for three consecutive polls")
+                if not samples and time.monotonic() - started >= 1.0:
+                    _stop_player(player)
+                    raise WeftRefused(
+                        "no complete telemetry row within one second")
+                if player.poll() is not None:
+                    if player.poll() != 0:
+                        raise RuntimeError(f"audio player exited {player.poll()}")
+                    break
+                time.sleep(0.25)
+                continue
+            consecutive_missing = 0
             row = {
                 "monotonic_s": time.monotonic(),
                 "forward_power_w": forward_w,

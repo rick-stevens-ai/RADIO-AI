@@ -203,7 +203,7 @@ def test_real_send_refuses_missing_swr_or_alc_telemetry(tmp_path, monkeypatch):
     def fake_keyed(rig, **kwargs):
         yield {"freq_hz": rig.freq}
     monkeypatch.setattr(weft.txmod, "keyed", fake_keyed)
-    with pytest.raises(weft.WeftRefused, match="SWR/ALC telemetry unavailable"):
+    with pytest.raises(weft.WeftRefused, match="telemetry unavailable"):
         weft.send(rig, wav, manifest, station_callsign="KD9NWA", allow_tx=True)
 
 
@@ -260,4 +260,58 @@ def test_monitor_aborts_player_immediately_on_power_limit(monkeypatch):
     with pytest.raises(weft.WeftRefused, match="forward power exceeded"):
         weft._play_and_monitor(rig, "x.wav", max_swr=2.0,
                                max_alc=1.0, max_forward=10.0)
+    assert player.terminated
+
+
+def test_monitor_tolerates_two_transient_telemetry_misses(monkeypatch):
+    class Player:
+        def __init__(self):
+            self.polls = 0
+            self.terminated = False
+        def poll(self):
+            self.polls += 1
+            return 0 if self.polls >= 4 else None
+        def terminate(self):
+            self.terminated = True
+        def wait(self, timeout=None):
+            return 0
+    class TransientRig(FakeRig):
+        def __init__(self):
+            super().__init__()
+            self.reads = 0
+        def get_fwd_power(self):
+            self.reads += 1
+            return None if self.reads <= 2 else 1.0
+        def get_swr(self):
+            return None if self.reads <= 2 else 1.1
+        def get_alc(self):
+            return None if self.reads <= 2 else 0.1
+    player = Player()
+    monkeypatch.setattr(weft, "_start_player", lambda wav: player)
+    monkeypatch.setattr(weft.time, "sleep", lambda seconds: None)
+    samples, missing = weft._play_and_monitor(
+        TransientRig(), "x.wav", max_swr=2.0,
+        max_alc=1.0, max_forward=10.0)
+    assert len(missing) == 2
+    assert samples
+    assert not player.terminated
+
+
+def test_monitor_aborts_on_third_consecutive_telemetry_miss(monkeypatch):
+    class Player:
+        def __init__(self): self.terminated = False
+        def poll(self): return None
+        def terminate(self): self.terminated = True
+        def wait(self, timeout=None): return 0
+    class MissingRig(FakeRig):
+        def get_fwd_power(self): return None
+        def get_swr(self): return None
+        def get_alc(self): return None
+    player = Player()
+    monkeypatch.setattr(weft, "_start_player", lambda wav: player)
+    monkeypatch.setattr(weft.time, "sleep", lambda seconds: None)
+    with pytest.raises(weft.WeftRefused, match="three consecutive"):
+        weft._play_and_monitor(
+            MissingRig(), "x.wav", max_swr=2.0,
+            max_alc=1.0, max_forward=10.0)
     assert player.terminated
