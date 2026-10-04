@@ -25,7 +25,7 @@ import subprocess
 import time
 from typing import Optional
 
-SERIAL_DEV = "/dev/ttyUSB0"
+SERIAL_DEV = "/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_IC-7300_02024946-if00-port0"
 BAUD = 115200
 CIV_RIG_ADDR = 0x94   # IC-7300 default CI-V address
 CIV_CTRL_ADDR = 0xE0  # this controller

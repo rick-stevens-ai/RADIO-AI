@@ -1,0 +1,142 @@
+{
+  "assigned_sdrs": [
+    {
+      "endpoint": "22693.proxy.kiwisdr.com:8073",
+      "receiver_id": "wide-27",
+      "site": "42.20,-89.10"
+    },
+    {
+      "endpoint": "22059.proxy.kiwisdr.com:8073",
+      "receiver_id": "wide-25",
+      "site": "44.81,-86.06"
+    },
+    {
+      "endpoint": "sdr.ddns.net:8073",
+      "receiver_id": "wide-22",
+      "site": "32.60,-97.38"
+    },
+    {
+      "endpoint": "kx4az1.proxy.kiwisdr.com:8073",
+      "receiver_id": "wide-26",
+      "site": "33.96,-83.38"
+    },
+    {
+      "endpoint": "22062.proxy.kiwisdr.com:8073",
+      "receiver_id": "wide-21",
+      "site": "29.75,-85.26"
+    },
+    {
+      "endpoint": "n4jjs.com:8073",
+      "receiver_id": "wide-20",
+      "site": "35.55,-78.74"
+    }
+  ],
+  "expires_epoch": 1791154800.0,
+  "hour_id": "2026-10-04T22Z",
+  "modes": {
+    "audio-cw": {
+      "checks": [
+        "assignment-fresh",
+        "band-legal",
+        "sdr-quorum",
+        "mode-clearance",
+        "tuner",
+        "telemetry",
+        "closeout"
+      ],
+      "owner": "mode-executor"
+    },
+    "bfsk": {
+      "checks": [
+        "assignment-fresh",
+        "band-legal",
+        "sdr-quorum",
+        "mode-clearance",
+        "tuner",
+        "telemetry",
+        "closeout"
+      ],
+      "owner": "mode-executor"
+    },
+    "bpsk": {
+      "checks": [
+        "assignment-fresh",
+        "band-legal",
+        "sdr-quorum",
+        "mode-clearance",
+        "tuner",
+        "telemetry",
+        "closeout"
+      ],
+      "owner": "offline-harness"
+    },
+    "chirp-fountain": {
+      "checks": [
+        "assignment-fresh",
+        "band-legal",
+        "sdr-quorum",
+        "mode-clearance",
+        "tuner",
+        "telemetry",
+        "closeout"
+      ],
+      "owner": "mode-executor"
+    },
+    "key-cw": {
+      "checks": [
+        "assignment-fresh",
+        "band-legal",
+        "sdr-quorum",
+        "mode-clearance",
+        "tuner",
+        "telemetry",
+        "closeout"
+      ],
+      "owner": "mode-executor"
+    },
+    "micro-ofdm": {
+      "checks": [
+        "assignment-fresh",
+        "band-legal",
+        "sdr-quorum",
+        "mode-clearance",
+        "tuner",
+        "telemetry",
+        "closeout"
+      ],
+      "owner": "mode-executor"
+    },
+    "pilot-sc": {
+      "checks": [
+        "assignment-fresh",
+        "band-legal",
+        "sdr-quorum",
+        "mode-clearance",
+        "tuner",
+        "telemetry",
+        "closeout"
+      ],
+      "owner": "mode-executor"
+    },
+    "weft": {
+      "checks": [
+        "assignment-fresh",
+        "band-legal",
+        "sdr-quorum",
+        "mode-clearance",
+        "tuner",
+        "telemetry",
+        "closeout"
+      ],
+      "owner": "mode-executor"
+    }
+  },
+  "run_id": "3",
+  "schema": "hourly-15-45-assignment-v1",
+  "seal": {
+    "algorithm": "sha256",
+    "digest": "e9b1d42010da1d5c510b3cb2c1811cad6133a1304df16ae3402f12258a9d6f4c"
+  },
+  "selected_band": "10m",
+  "source_admission_sha256": "15ce6a26043cd9ff2ca5693825482b7714c48326b47a661f1da05605f1481a9b"
+}

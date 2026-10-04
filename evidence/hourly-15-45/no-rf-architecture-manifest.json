@@ -1,0 +1,22 @@
+{
+  "schema": "hourly-15-45-no-rf-architecture-v8",
+  "created_epoch": 1791151168.9230855,
+  "rf_capable": false,
+  "rf_performed": false,
+  "live_adapters_included": false,
+  "contract": {
+    "ft8_tx": 30,
+    "ft8_rx": 30,
+    "rf_mode_reservations": 7,
+    "offline_modes": [
+      "BPSK"
+    ],
+    "processing_overlap": true,
+    "cross_process_rf_lock": true,
+    "cross_process_state_lock": true,
+    "skip_never_catch_up": true,
+    "persistent_ft8_composed": true,
+    "rx_callbacks_externalized": true,
+    "persistent_receiver_manager": true
+  }
+}
