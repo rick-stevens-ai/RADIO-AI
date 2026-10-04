@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hourly-15-45-assignment-v1.schema.json",
+  "title": "Hourly 15/45 sealed band and SDR assignment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "hour_id",
+    "run_id",
+    "selected_band",
+    "expires_epoch",
+    "assigned_sdrs",
+    "source_admission_sha256",
+    "modes",
+    "seal"
+  ],
+  "properties": {
+    "schema": {"const": "hourly-15-45-assignment-v1"},
+    "hour_id": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}Z$"},
+    "run_id": {"type": ["string", "integer"]},
+    "selected_band": {"enum": ["80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m"]},
+    "expires_epoch": {"type": "number", "exclusiveMinimum": 0},
+    "assigned_sdrs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["endpoint", "receiver_id", "site"],
+        "properties": {
+          "endpoint": {"type": "string", "minLength": 1},
+          "receiver_id": {"type": "string", "minLength": 1},
+          "site": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "source_admission_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key-cw", "audio-cw", "bpsk", "bfsk", "weft", "pilot-sc", "micro-ofdm", "chirp-fountain"],
+      "properties": {
+        "key-cw": {"$ref": "#/$defs/responsibility"},
+        "audio-cw": {"$ref": "#/$defs/responsibility"},
+        "bpsk": {"$ref": "#/$defs/responsibility"},
+        "bfsk": {"$ref": "#/$defs/responsibility"},
+        "weft": {"$ref": "#/$defs/responsibility"},
+        "pilot-sc": {"$ref": "#/$defs/responsibility"},
+        "micro-ofdm": {"$ref": "#/$defs/responsibility"},
+        "chirp-fountain": {"$ref": "#/$defs/responsibility"}
+      }
+    },
+    "seal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  },
+  "$defs": {
+    "responsibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "checks"],
+      "properties": {
+        "owner": {"type": "string", "minLength": 1},
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

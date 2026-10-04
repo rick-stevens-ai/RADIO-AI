@@ -1,0 +1,23 @@
+{
+  "assigned_sdrs": [
+    {"endpoint": "kiwi.example.net:8073", "receiver_id": "sdr-a", "site": "EN61"},
+    {"endpoint": "https://kiwi2.example.net:8074/", "receiver_id": "sdr-b", "site": "FN31"}
+  ],
+  "expires_epoch": 4000000000,
+  "hour_id": "2026-10-04T22Z",
+  "modes": {
+    "audio-cw": {"checks": ["fresh", "legal", "assigned-sdrs"], "owner": "executor"},
+    "bfsk": {"checks": ["fresh", "legal", "assigned-sdrs"], "owner": "executor"},
+    "bpsk": {"checks": ["fresh", "legal", "assigned-sdrs"], "owner": "offline"},
+    "chirp-fountain": {"checks": ["fresh", "legal", "assigned-sdrs"], "owner": "executor"},
+    "key-cw": {"checks": ["fresh", "legal", "assigned-sdrs"], "owner": "executor"},
+    "micro-ofdm": {"checks": ["fresh", "legal", "assigned-sdrs"], "owner": "executor"},
+    "pilot-sc": {"checks": ["fresh", "legal", "assigned-sdrs"], "owner": "executor"},
+    "weft": {"checks": ["fresh", "legal", "assigned-sdrs"], "owner": "executor"}
+  },
+  "run_id": "rehearsal-1",
+  "schema": "hourly-15-45-assignment-v1",
+  "seal": {"algorithm": "sha256", "digest": "198762e7eacef24647f9ff161210cf20100dfb8e266676f4b0c2e20210c0cda6"},
+  "selected_band": "20m",
+  "source_admission_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

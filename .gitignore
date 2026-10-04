@@ -21,3 +21,10 @@ seen.json
 relay.log
 relay/logs/
 relay/seen.json
+
+# Hourly pipeline runtime state/evidence
+propagation/ft8-admission/runs/
+propagation/ft8-admission/state.json
+orchestration/hourly-15-45/evidence/
+adapters/hourly-assignment/**/runs/
+adapters/hourly-assignment/**/evidence/

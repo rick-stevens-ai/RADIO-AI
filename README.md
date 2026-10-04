@@ -175,6 +175,7 @@ skill/
   reference/         commands.md, architecture.md, troubleshooting.md, relay-chain.md
 docs/
   STATION.md         detailed station/architecture doc
+  HOURLY-15-45-PIPELINE.md  FT8 scout + overlapped eight-mode orchestration
   JS8CALL_NOTES.md   headless JS8Call TX writeup
   PLAN.md            build plan / capability roadmap
   TODO.md            roadmap / status

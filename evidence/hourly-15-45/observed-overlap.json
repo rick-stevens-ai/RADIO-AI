@@ -1,0 +1,1484 @@
+{
+  "schema": "hourly-15-45-overlap-rehearsal-v2",
+  "rf_performed": false,
+  "ft8_tx_count": 30,
+  "ft8_rx_count": 30,
+  "rf_modes": [
+    "KEY-CW",
+    "AUDIO-CW",
+    "BFSK",
+    "WEFT",
+    "PILOT-SC",
+    "MICRO-OFDM",
+    "CHIRP-FOUNTAIN"
+  ],
+  "offline_modes": [
+    "BPSK"
+  ],
+  "processing_jobs": 44,
+  "rf_processing_overlap_pairs": 208,
+  "every_rf_interval_overlaps_processing": true,
+  "rf_lane_exclusive": true,
+  "intervals": [
+    {
+      "name": "FT8-TX-000",
+      "lane": "rf",
+      "start": 4213493.374725686,
+      "end": 4213493.37978547
+    },
+    {
+      "name": "FT8-RX-015",
+      "lane": "processing",
+      "start": 4213493.375736811,
+      "end": 4213493.380794994
+    },
+    {
+      "name": "FT8-TX-030",
+      "lane": "rf",
+      "start": 4213493.380351984,
+      "end": 4213493.385521992
+    },
+    {
+      "name": "FT8-RX-045",
+      "lane": "processing",
+      "start": 4213493.384733365,
+      "end": 4213493.38978886
+    },
+    {
+      "name": "FT8-TX-060",
+      "lane": "rf",
+      "start": 4213493.389346602,
+      "end": 4213493.394514146
+    },
+    {
+      "name": "FT8-RX-075",
+      "lane": "processing",
+      "start": 4213493.393732462,
+      "end": 4213493.398786966
+    },
+    {
+      "name": "FT8-TX-090",
+      "lane": "rf",
+      "start": 4213493.398408868,
+      "end": 4213493.403587564
+    },
+    {
+      "name": "FT8-RX-105",
+      "lane": "processing",
+      "start": 4213493.402827,
+      "end": 4213493.408013984
+    },
+    {
+      "name": "FT8-TX-120",
+      "lane": "rf",
+      "start": 4213493.407424414,
+      "end": 4213493.412607766
+    },
+    {
+      "name": "FT8-RX-135",
+      "lane": "processing",
+      "start": 4213493.411841954,
+      "end": 4213493.416921066
+    },
+    {
+      "name": "FT8-TX-150",
+      "lane": "rf",
+      "start": 4213493.416345431,
+      "end": 4213493.421770112
+    },
+    {
+      "name": "FT8-RX-165",
+      "lane": "processing",
+      "start": 4213493.42083662,
+      "end": 4213493.426032948
+    },
+    {
+      "name": "FT8-TX-180",
+      "lane": "rf",
+      "start": 4213493.425415473,
+      "end": 4213493.430579625
+    },
+    {
+      "name": "FT8-RX-195",
+      "lane": "processing",
+      "start": 4213493.429843429,
+      "end": 4213493.435022445
+    },
+    {
+      "name": "FT8-TX-210",
+      "lane": "rf",
+      "start": 4213493.434393914,
+      "end": 4213493.439551282
+    },
+    {
+      "name": "FT8-RX-225",
+      "lane": "processing",
+      "start": 4213493.438753311,
+      "end": 4213493.443901414
+    },
+    {
+      "name": "FT8-TX-240",
+      "lane": "rf",
+      "start": 4213493.443383284,
+      "end": 4213493.448537452
+    },
+    {
+      "name": "FT8-RX-255",
+      "lane": "processing",
+      "start": 4213493.447814537,
+      "end": 4213493.45296224
+    },
+    {
+      "name": "FT8-TX-270",
+      "lane": "rf",
+      "start": 4213493.452327069,
+      "end": 4213493.457480213
+    },
+    {
+      "name": "band-sweep",
+      "lane": "processing",
+      "start": 4213493.371458439,
+      "end": 4213493.461523896
+    },
+    {
+      "name": "FT8-RX-285",
+      "lane": "processing",
+      "start": 4213493.456817378,
+      "end": 4213493.461964666
+    },
+    {
+      "name": "FT8-TX-300",
+      "lane": "rf",
+      "start": 4213493.461376391,
+      "end": 4213493.466526719
+    },
+    {
+      "name": "FT8-RX-315",
+      "lane": "processing",
+      "start": 4213493.4658179,
+      "end": 4213493.471198181
+    },
+    {
+      "name": "FT8-TX-330",
+      "lane": "rf",
+      "start": 4213493.470326577,
+      "end": 4213493.475472536
+    },
+    {
+      "name": "FT8-RX-345",
+      "lane": "processing",
+      "start": 4213493.47501551,
+      "end": 4213493.48017083
+    },
+    {
+      "name": "FT8-TX-360",
+      "lane": "rf",
+      "start": 4213493.479378315,
+      "end": 4213493.48452789
+    },
+    {
+      "name": "FT8-RX-375",
+      "lane": "processing",
+      "start": 4213493.483737055,
+      "end": 4213493.488872487
+    },
+    {
+      "name": "FT8-TX-390",
+      "lane": "rf",
+      "start": 4213493.488325428,
+      "end": 4213493.493472764
+    },
+    {
+      "name": "FT8-RX-405",
+      "lane": "processing",
+      "start": 4213493.492848121,
+      "end": 4213493.498007585
+    },
+    {
+      "name": "FT8-TX-420",
+      "lane": "rf",
+      "start": 4213493.497328446,
+      "end": 4213493.502480741
+    },
+    {
+      "name": "FT8-RX-435",
+      "lane": "processing",
+      "start": 4213493.50181645,
+      "end": 4213493.506877866
+    },
+    {
+      "name": "FT8-TX-450",
+      "lane": "rf",
+      "start": 4213493.506344471,
+      "end": 4213493.511493727
+    },
+    {
+      "name": "FT8-RX-465",
+      "lane": "processing",
+      "start": 4213493.510814268,
+      "end": 4213493.515976756
+    },
+    {
+      "name": "FT8-TX-480",
+      "lane": "rf",
+      "start": 4213493.515343569,
+      "end": 4213493.520885179
+    },
+    {
+      "name": "FT8-RX-495",
+      "lane": "processing",
+      "start": 4213493.51984127,
+      "end": 4213493.525019358
+    },
+    {
+      "name": "FT8-TX-510",
+      "lane": "rf",
+      "start": 4213493.524356411,
+      "end": 4213493.529571779
+    },
+    {
+      "name": "FT8-RX-525",
+      "lane": "processing",
+      "start": 4213493.528847327,
+      "end": 4213493.534018775
+    },
+    {
+      "name": "FT8-TX-540",
+      "lane": "rf",
+      "start": 4213493.5333893,
+      "end": 4213493.538557676
+    },
+    {
+      "name": "FT8-RX-555",
+      "lane": "processing",
+      "start": 4213493.537848905,
+      "end": 4213493.543037025
+    },
+    {
+      "name": "FT8-TX-570",
+      "lane": "rf",
+      "start": 4213493.542484894,
+      "end": 4213493.547653158
+    },
+    {
+      "name": "FT8-RX-585",
+      "lane": "processing",
+      "start": 4213493.546844867,
+      "end": 4213493.55191185
+    },
+    {
+      "name": "FT8-TX-600",
+      "lane": "rf",
+      "start": 4213493.551396632,
+      "end": 4213493.556570432
+    },
+    {
+      "name": "FT8-RX-615",
+      "lane": "processing",
+      "start": 4213493.55584302,
+      "end": 4213493.561252309
+    },
+    {
+      "name": "FT8-TX-630",
+      "lane": "rf",
+      "start": 4213493.560552898,
+      "end": 4213493.565855051
+    },
+    {
+      "name": "FT8-RX-645",
+      "lane": "processing",
+      "start": 4213493.564866214,
+      "end": 4213493.570587681
+    },
+    {
+      "name": "FT8-TX-660",
+      "lane": "rf",
+      "start": 4213493.569595036,
+      "end": 4213493.57476602
+    },
+    {
+      "name": "FT8-RX-675",
+      "lane": "processing",
+      "start": 4213493.57384512,
+      "end": 4213493.579199704
+    },
+    {
+      "name": "FT8-TX-690",
+      "lane": "rf",
+      "start": 4213493.578581861,
+      "end": 4213493.583991406
+    },
+    {
+      "name": "FT8-RX-705",
+      "lane": "processing",
+      "start": 4213493.582982634,
+      "end": 4213493.588439955
+    },
+    {
+      "name": "FT8-TX-720",
+      "lane": "rf",
+      "start": 4213493.587617247,
+      "end": 4213493.592724599
+    },
+    {
+      "name": "FT8-RX-735",
+      "lane": "processing",
+      "start": 4213493.591841123,
+      "end": 4213493.59692665
+    },
+    {
+      "name": "FT8-TX-750",
+      "lane": "rf",
+      "start": 4213493.596238519,
+      "end": 4213493.601395487
+    },
+    {
+      "name": "FT8-RX-765",
+      "lane": "processing",
+      "start": 4213493.600739916,
+      "end": 4213493.606048517
+    },
+    {
+      "name": "FT8-TX-780",
+      "lane": "rf",
+      "start": 4213493.605402114,
+      "end": 4213493.610573577
+    },
+    {
+      "name": "FT8-RX-795",
+      "lane": "processing",
+      "start": 4213493.609837478,
+      "end": 4213493.615194671
+    },
+    {
+      "name": "FT8-TX-810",
+      "lane": "rf",
+      "start": 4213493.614578348,
+      "end": 4213493.62012711
+    },
+    {
+      "name": "sdr-capture",
+      "lane": "processing",
+      "start": 4213493.371670536,
+      "end": 4213493.624302857
+    },
+    {
+      "name": "FT8-RX-825",
+      "lane": "processing",
+      "start": 4213493.618845216,
+      "end": 4213493.624377753
+    },
+    {
+      "name": "FT8-TX-840",
+      "lane": "rf",
+      "start": 4213493.623574774,
+      "end": 4213493.628730478
+    },
+    {
+      "name": "pskreporter",
+      "lane": "processing",
+      "start": 4213493.380329776,
+      "end": 4213493.632407887
+    },
+    {
+      "name": "FT8-RX-855",
+      "lane": "processing",
+      "start": 4213493.627839977,
+      "end": 4213493.632999681
+    },
+    {
+      "name": "FT8-TX-870",
+      "lane": "rf",
+      "start": 4213493.632238942,
+      "end": 4213493.637377925
+    },
+    {
+      "name": "sdr-decode-ranking",
+      "lane": "processing",
+      "start": 4213493.398233475,
+      "end": 4213493.63830225
+    },
+    {
+      "name": "next-cell-prep",
+      "lane": "processing",
+      "start": 4213493.506314439,
+      "end": 4213493.64137548
+    },
+    {
+      "name": "sealing",
+      "lane": "processing",
+      "start": 4213493.55134268,
+      "end": 4213493.641422104
+    },
+    {
+      "name": "FT8-RX-885",
+      "lane": "processing",
+      "start": 4213493.636839507,
+      "end": 4213493.64190353
+    },
+    {
+      "name": "KEY-CW",
+      "lane": "rf",
+      "start": 4213493.641241095,
+      "end": 4213493.757490321
+    },
+    {
+      "name": "process-KEY-CW",
+      "lane": "processing",
+      "start": 4213493.641570825,
+      "end": 4213493.872983751
+    },
+    {
+      "name": "AUDIO-CW",
+      "lane": "rf",
+      "start": 4213493.757523521,
+      "end": 4213493.873584602
+    },
+    {
+      "name": "process-AUDIO-CW",
+      "lane": "processing",
+      "start": 4213493.757600322,
+      "end": 4213493.988996528
+    },
+    {
+      "name": "BFSK",
+      "lane": "rf",
+      "start": 4213493.87360129,
+      "end": 4213493.989620643
+    },
+    {
+      "name": "process-BFSK",
+      "lane": "processing",
+      "start": 4213493.873152024,
+      "end": 4213494.104543495
+    },
+    {
+      "name": "WEFT",
+      "lane": "rf",
+      "start": 4213493.989638707,
+      "end": 4213494.105429099
+    },
+    {
+      "name": "process-WEFT",
+      "lane": "processing",
+      "start": 4213493.988976576,
+      "end": 4213494.220630272
+    },
+    {
+      "name": "PILOT-SC",
+      "lane": "rf",
+      "start": 4213494.105438795,
+      "end": 4213494.221495412
+    },
+    {
+      "name": "process-PILOT-SC",
+      "lane": "processing",
+      "start": 4213494.104466294,
+      "end": 4213494.335874373
+    },
+    {
+      "name": "MICRO-OFDM",
+      "lane": "rf",
+      "start": 4213494.221527748,
+      "end": 4213494.337415548
+    },
+    {
+      "name": "BPSK",
+      "lane": "processing",
+      "start": 4213493.641405192,
+      "end": 4213494.451590524
+    },
+    {
+      "name": "process-CHIRP-FOUNTAIN",
+      "lane": "processing",
+      "start": 4213494.336053206,
+      "end": 4213494.45164742
+    },
+    {
+      "name": "process-MICRO-OFDM",
+      "lane": "processing",
+      "start": 4213494.220563263,
+      "end": 4213494.451774781
+    },
+    {
+      "name": "CHIRP-FOUNTAIN",
+      "lane": "rf",
+      "start": 4213494.337434124,
+      "end": 4213494.453712454
+    }
+  ],
+  "events": [
+    {
+      "kind": "start",
+      "epoch": 4213493.371460679,
+      "name": "band-sweep",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.371672008,
+      "name": "sdr-capture",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.374727014,
+      "name": "FT8-TX-000",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.375738299,
+      "name": "FT8-RX-015",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.379783198,
+      "name": "FT8-TX-000",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.380331888,
+      "name": "pskreporter",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.380355152,
+      "name": "FT8-TX-030",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.38079333,
+      "name": "FT8-RX-015",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.384733781,
+      "name": "FT8-RX-045",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.385519224,
+      "name": "FT8-TX-030",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.389349642,
+      "name": "FT8-TX-060",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.38978806,
+      "name": "FT8-RX-045",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.39373275,
+      "name": "FT8-RX-075",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.394511122,
+      "name": "FT8-TX-060",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.398234099,
+      "name": "sdr-decode-ranking",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.398411012,
+      "name": "FT8-TX-090",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.398785894,
+      "name": "FT8-RX-075",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.402829112,
+      "name": "FT8-RX-105",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.403580732,
+      "name": "FT8-TX-090",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.407430494,
+      "name": "FT8-TX-120",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.408006384,
+      "name": "FT8-RX-105",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.411847506,
+      "name": "FT8-RX-135",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.412602326,
+      "name": "FT8-TX-120",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.416349831,
+      "name": "FT8-TX-150",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.41691697,
+      "name": "FT8-RX-135",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.420841564,
+      "name": "FT8-RX-165",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.421758896,
+      "name": "FT8-TX-150",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.425420513,
+      "name": "FT8-TX-180",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.426028004,
+      "name": "FT8-RX-165",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.429848165,
+      "name": "FT8-RX-195",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.430574521,
+      "name": "FT8-TX-180",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.434398778,
+      "name": "FT8-TX-210",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.435016749,
+      "name": "FT8-RX-195",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.438757823,
+      "name": "FT8-RX-225",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.439548738,
+      "name": "FT8-TX-210",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.443385364,
+      "name": "FT8-TX-240",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.44389879,
+      "name": "FT8-RX-225",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.447816585,
+      "name": "FT8-RX-255",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.448534524,
+      "name": "FT8-TX-240",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.452329133,
+      "name": "FT8-TX-270",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.452958832,
+      "name": "FT8-RX-255",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.456819602,
+      "name": "FT8-RX-285",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.457477429,
+      "name": "FT8-TX-270",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.461378487,
+      "name": "FT8-TX-300",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.46152156,
+      "name": "band-sweep",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.461962602,
+      "name": "FT8-RX-285",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.465819964,
+      "name": "FT8-RX-315",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.466524511,
+      "name": "FT8-TX-300",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.470328513,
+      "name": "FT8-TX-330",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.471195669,
+      "name": "FT8-RX-315",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.475017558,
+      "name": "FT8-RX-345",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.475470168,
+      "name": "FT8-TX-330",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.479380235,
+      "name": "FT8-TX-360",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.480168526,
+      "name": "FT8-RX-345",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.483738639,
+      "name": "FT8-RX-375",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.484525986,
+      "name": "FT8-TX-360",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.488327412,
+      "name": "FT8-TX-390",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.488870375,
+      "name": "FT8-RX-375",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.492850153,
+      "name": "FT8-RX-405",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.493470476,
+      "name": "FT8-TX-390",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.497330414,
+      "name": "FT8-TX-420",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.497998913,
+      "name": "FT8-RX-405",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.501818546,
+      "name": "FT8-RX-435",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.502478469,
+      "name": "FT8-TX-420",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.506316439,
+      "name": "next-cell-prep",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.506346583,
+      "name": "FT8-TX-450",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.506876458,
+      "name": "FT8-RX-435",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.510816396,
+      "name": "FT8-RX-465",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.511491295,
+      "name": "FT8-TX-450",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.515348609,
+      "name": "FT8-TX-480",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.515971876,
+      "name": "FT8-RX-465",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.519846054,
+      "name": "FT8-RX-495",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.520880187,
+      "name": "FT8-TX-480",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.524361403,
+      "name": "FT8-TX-510",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.525014334,
+      "name": "FT8-RX-495",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.528852447,
+      "name": "FT8-RX-525",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.529566179,
+      "name": "FT8-TX-510",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.533394372,
+      "name": "FT8-TX-540",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.534013927,
+      "name": "FT8-RX-525",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.537853769,
+      "name": "FT8-RX-555",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.538552764,
+      "name": "FT8-TX-540",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.542489758,
+      "name": "FT8-TX-570",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.543022145,
+      "name": "FT8-RX-555",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.546849859,
+      "name": "FT8-RX-585",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.547648118,
+      "name": "FT8-TX-570",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.55134756,
+      "name": "sealing",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.551398968,
+      "name": "FT8-TX-600",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.55191017,
+      "name": "FT8-RX-585",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.555847964,
+      "name": "FT8-RX-615",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.556565776,
+      "name": "FT8-TX-600",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.560557874,
+      "name": "FT8-TX-630",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.561247557,
+      "name": "FT8-RX-615",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.564871126,
+      "name": "FT8-RX-645",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.565844379,
+      "name": "FT8-TX-630",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.569600044,
+      "name": "FT8-TX-660",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.570578672,
+      "name": "FT8-RX-645",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.573850144,
+      "name": "FT8-RX-675",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.574761316,
+      "name": "FT8-TX-660",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.578586789,
+      "name": "FT8-TX-690",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.579195048,
+      "name": "FT8-RX-675",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.582986762,
+      "name": "FT8-RX-705",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.58398667,
+      "name": "FT8-TX-690",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.587622319,
+      "name": "FT8-TX-720",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.588435107,
+      "name": "FT8-RX-705",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.591845875,
+      "name": "FT8-RX-735",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.592720023,
+      "name": "FT8-TX-720",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.596238935,
+      "name": "FT8-TX-750",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.596921738,
+      "name": "FT8-RX-735",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.600740716,
+      "name": "FT8-RX-765",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.601390431,
+      "name": "FT8-TX-750",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.605406914,
+      "name": "FT8-TX-780",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.606043893,
+      "name": "FT8-RX-765",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.609842198,
+      "name": "FT8-RX-795",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.610562073,
+      "name": "FT8-TX-780",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.614583244,
+      "name": "FT8-TX-810",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.615189583,
+      "name": "FT8-RX-795",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.618850512,
+      "name": "FT8-RX-825",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.620122326,
+      "name": "FT8-TX-810",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.62357991,
+      "name": "FT8-TX-840",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.624293193,
+      "name": "sdr-capture",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.624371481,
+      "name": "FT8-RX-825",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.627844905,
+      "name": "FT8-RX-855",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.628725678,
+      "name": "FT8-TX-840",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.63223939,
+      "name": "FT8-TX-870",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.632403374,
+      "name": "pskreporter",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.632997105,
+      "name": "FT8-RX-855",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.636844259,
+      "name": "FT8-RX-885",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.637375013,
+      "name": "FT8-TX-870",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.63829225,
+      "name": "sdr-decode-ranking",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.641242215,
+      "name": "KEY-CW",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.641374488,
+      "name": "next-cell-prep",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.641407112,
+      "name": "BPSK",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.641419352,
+      "name": "sealing",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.641572089,
+      "name": "process-KEY-CW",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.641902506,
+      "name": "FT8-RX-885",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.757480433,
+      "name": "KEY-CW",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.757524321,
+      "name": "AUDIO-CW",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.757609554,
+      "name": "process-AUDIO-CW",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.872974711,
+      "name": "process-KEY-CW",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.873161656,
+      "name": "process-BFSK",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.87358009,
+      "name": "AUDIO-CW",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.873601834,
+      "name": "BFSK",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.988981376,
+      "name": "process-WEFT",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.988994064,
+      "name": "process-AUDIO-CW",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213493.989615523,
+      "name": "BFSK",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213493.989639283,
+      "name": "WEFT",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213494.104471254,
+      "name": "process-PILOT-SC",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213494.104538375,
+      "name": "process-BFSK",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213494.105427547,
+      "name": "WEFT",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213494.105439275,
+      "name": "PILOT-SC",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213494.220568095,
+      "name": "process-MICRO-OFDM",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213494.220625056,
+      "name": "process-WEFT",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213494.22148674,
+      "name": "PILOT-SC",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213494.221528484,
+      "name": "MICRO-OFDM",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213494.335864421,
+      "name": "process-PILOT-SC",
+      "lane": "processing"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213494.336058918,
+      "name": "process-CHIRP-FOUNTAIN",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213494.3374103,
+      "name": "MICRO-OFDM",
+      "lane": "rf"
+    },
+    {
+      "kind": "start",
+      "epoch": 4213494.33743486,
+      "name": "CHIRP-FOUNTAIN",
+      "lane": "rf"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213494.451585388,
+      "name": "BPSK",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213494.451644908,
+      "name": "process-CHIRP-FOUNTAIN",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213494.451773501,
+      "name": "process-MICRO-OFDM",
+      "lane": "processing"
+    },
+    {
+      "kind": "end",
+      "epoch": 4213494.453702598,
+      "name": "CHIRP-FOUNTAIN",
+      "lane": "rf"
+    }
+  ]
+}
